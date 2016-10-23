@@ -56,7 +56,7 @@ function FriendlyChat() {
 
 
   //TODO: check to ensure names are good...  
-  //http://localhost:3001/index.html?userid=bj10001&firstName=Bob&lastName=Jain&mode=edit
+  //http://localhost:3001/index.html?userid=bj10001&firstName=Bob&lastName=Jain&mode=edit&desiredDocs=DriversLisence,PaySlip,AadhaarCard
 
   //console.log("reading params" + this.userid);  
   //userid=bj10001&name=Bob%20Jain&mode=edit
@@ -64,16 +64,20 @@ function FriendlyChat() {
   this.firstName = getUrlParameter("firstName") || "No";
   this.lastName = getUrlParameter("lastName") || "Name";
   this.mode = getUrlParameter("mode") || "view";
+  this.desiredDocs = getUrlParameter("desiredDocs") || "";
+  this.uploadedDocArray = [];
 
+
+  //Now setup UX based on parametters
   $("#nameHeader").html(this.firstName + ' ' + this.lastName);
 
   if (this.mode == "edit")
   {
     $("#messages").addClass("messages-edit-mode");
     $("#image-form").show();
-
-    //show X buttons to delete docs    
-    $(".clear-button").addClass(".clear-button-edit-mode");
+    $(".addDocs").show();   
+    
+   
   }
 
   
@@ -146,8 +150,11 @@ FriendlyChat.prototype.loadMessages = function() {
 }
 */    
 
-
+    if (val.document && val.document.type) {
+      this.uploadedDocArray.push(val.document.type);//add to collection...
+    }
     this.displayMessage(data.key, val.document.summary, '', val.facePhotoURL, val.photoURL);
+    
   }.bind(this);
   this.messagesRef.limitToLast(12).on('child_added', setMessage);
   this.messagesRef.limitToLast(12).on('child_changed', setMessage);
@@ -471,7 +478,67 @@ FriendlyChat.prototype.displayMessage = function(key, name, text, picUrl, imageU
   setTimeout(function() {div.classList.add('visible')}, 1);
   this.messageList.scrollTop = this.messageList.scrollHeight;
   this.messageInput.focus();
+
+  //check to update encouragement to add documents...
+  if (this.mode == "edit") {
+    this.setNeededDocsMessage();
+  }
 };
+
+FriendlyChat.prototype.setNeededDocsMessage = function() {
+ //Please add your: DriversLisence,PaySlip,AadhaarCard
+   //+ this.desiredDocs;
+
+  var desiredDocArray = this.desiredDocs.split(',');
+
+  //var neededDocs = arr_diff(desiredDocArray, this.uploadedDocArray);
+  var neededDocs = desiredDocArray.diff(this.uploadedDocArray);
+
+  
+  var message = "Please add your: <b>" + neededDocs.join(", ") + "</b>"
+  /*
+  for (var i = 0; i < neededDocs.length; i++){
+    message += neededDocs[i] + ", ";
+  }
+  */
+
+  if (neededDocs != "") {
+    $(".addDocs").html(message);
+  } else {
+    $(".addDocs").html("Thanks for uploading your: <b>" + desiredDocArray.join(", ") + "</b>");
+  }
+};
+
+Array.prototype.diff = function(a) {
+    return this.filter(function(i) {return a.indexOf(i) < 0;});
+};
+
+/*
+//get difference between two arrays...
+function arr_diff (a1, a2) {
+
+    var a = [], diff = [];
+
+    for (var i = 0; i < a1.length; i++) {
+        a[a1[i]] = true;
+    }
+
+    for (var i = 0; i < a2.length; i++) {
+        if (a[a2[i]]) {
+            delete a[a2[i]];
+        } else {
+            a[a2[i]] = true;
+        }
+    }
+
+    for (var k in a) {
+        diff.push(k);
+    }
+
+    return diff;
+};
+*/
+
 
 // Enables or disables the submit button depending on the values of the input
 // fields.
@@ -547,15 +614,15 @@ var getUrlParameter = function getUrlParameter(sParam) {
 
 window.onload = function() {
   window.friendlyChat = new FriendlyChat();
+  
 };
 
-$(document).ready(function() {
+$(document).ready(function () {
+  //round trip the passed parameters after doc upload...
   $('input[name=userid]').val(getUrlParameter("userid"));
   $('input[name=firstName]').val(getUrlParameter("firstName"));
   $('input[name=lastName]').val(getUrlParameter("lastName"));
-   $('input[name=mode]').val(getUrlParameter("mode"));
-//    $('input[name=circle]').prop("checked", (getQueryStr("circle")=="1"));
-//    $('input[name=square]').prop("checked", (getQueryStr("square")=="1"));
-//    $('input[name=star]').prop("checked", (getQueryStr("star")=="1"));
+  $('input[name=mode]').val(getUrlParameter("mode"));
+  $('input[name=desiredDocs]').val(getUrlParameter("desiredDocs"));
 });
 

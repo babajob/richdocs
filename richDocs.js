@@ -730,6 +730,13 @@ function detectIDDocument(texts, result) {
       }
     }
   }
+  //PALSLIP
+  else if (
+     findText("pay slip", texts) || findText("payslip", texts) || findText("salaryslip", texts) || findText("salary slip", texts)
+  ) {
+    result.document.type = "PaySlip";
+    result.document.summary += result.document.type + " ";
+  } 
 
       
   //All Card scanning...

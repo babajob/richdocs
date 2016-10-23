@@ -123,6 +123,14 @@ main, #messages-card {
    color:darkred;
 }
 
+.addDocs {
+font-size:8pt;
+color:gray;
+padding:10px 10px 0px 10px;
+
+
+}
+
 /*
 #message-form {
   display: flex;
