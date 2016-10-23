@@ -1,0 +1,7 @@
+{ 
+  "env": {
+"GOOGLE_APPLICATION_CREDENTIALS": "./RichDocsCreds.json",
+"GCLOUD_PROJECT": "babarichdocs"
+
+  }
+}
