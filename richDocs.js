@@ -510,7 +510,7 @@ richDocs.prototype.parsePhoto = function (photoURL, firebaseKey, user, options, 
 
 function finallyRun(options, result, callback) {
     //strip the google data...
-    if (!options.verbose && result.googleData) {
+    if (!options.verbose && result && result.googleData) {
       result.googleData.fullText = "";
       result.googleData.face = "";
       result.googleData.languageEntities = "";
@@ -620,10 +620,17 @@ function detectIDDocument(texts, result) {
     result.document.summary += state + " ";
   }
   
-    
-
-  //PASSPORT
+  //PALSLIP 
+  //comes at top because it has much of the other data below...
   if (
+     findText("pay slip", texts) || findText("payslip", texts) || findText("salaryslip", texts) || findText("salary slip", texts)
+  ) {
+    result.document.type = "PaySlip";
+    result.document.summary += result.document.type + " ";
+  } 
+    
+  //PASSPORT
+  else if (
     (findText("passport", texts))
   ) {
     result.document.type = "Passport";
@@ -730,13 +737,7 @@ function detectIDDocument(texts, result) {
       }
     }
   }
-  //PALSLIP
-  else if (
-     findText("pay slip", texts) || findText("payslip", texts) || findText("salaryslip", texts) || findText("salary slip", texts)
-  ) {
-    result.document.type = "PaySlip";
-    result.document.summary += result.document.type + " ";
-  } 
+  
 
       
   //All Card scanning...
