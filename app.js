@@ -60,5 +60,8 @@ app.use(function(err, req, res, next) {
   });
 });
 
+app.listen(3001, function () {
+  console.log('Express server listening on port 3001');
+});
 
 module.exports = app;
