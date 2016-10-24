@@ -159,6 +159,11 @@ FriendlyChat.prototype.loadMessages = function() {
   this.messagesRef.limitToLast(12).on('child_added', setMessage);
   this.messagesRef.limitToLast(12).on('child_changed', setMessage);
   this.messagesRef.limitToLast(12).on('child_removed', setMessage);
+
+  //check to update encouragement to add documents...
+  if (this.mode == "edit") {
+    this.setNeededDocsMessage();
+  }
 };
 
 // Saves a new message on the Firebase DB.
