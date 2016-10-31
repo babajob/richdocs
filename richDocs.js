@@ -94,11 +94,7 @@ var bucket = storage.bucket(process.env.GCLOUD_STORAGE_BUCKET);
 
 
 
-      
-
-
-
-
+       
 
 var richdocsDB = "richdocstest";
 var useProduction = false;
@@ -165,17 +161,17 @@ richDocs.prototype.deleteByUserIdAndId = function (userid, id, callback) {
             return callback(null, "Could not find richDocs object id:" + id);
           } else {
             
-            console.log("result.photoURL:" + result.photoURL);
-            if (!S(result.photoURL).contains(firebaseStorageBucket.trim() + "asds")) {
-              //if the photoURL is not ours immediately call the next function...
-              console.log("delete - photoURL was not in our domain:" + firebaseStorageBucket);
+            console.log("result.contentUrl:" + result.contentUrl);
+            if (!S(result.contentUrl).contains(firebaseStorageBucket.trim() + "asds")) {
+              //if the contentUrl is not ours immediately call the next function...
+              console.log("delete - contentUrl was not in our domain:" + firebaseStorageBucket);
               callback(null, result);
             } else {
-              console.log("delete - photoURL WAS in our domain");
+              console.log("delete - contentUrl WAS in our domain");
               // Create a reference to the file to delete
               /*
               TODO: Hook up Google storage to actually delete the old files...
-              var storageRef = storage.refFromUrl(result.photoURL);
+              var storageRef = storage.refFromUrl(result.contentUrl);
               // Delete the file
               storageRef.delete(
                 function (err) {
@@ -198,7 +194,7 @@ richDocs.prototype.deleteByUserIdAndId = function (userid, id, callback) {
 
     //Now that we've guaranteed the photoURL file is deleted, delete the FB object
     function (result, callback) {
-      console.log("starting delete of FB Object" + id + " result:" + result.photoURL);
+      console.log("starting delete of FB Object" + id + " result:" + result.contentUrl);
 
       refByUserId.remove(
         function (err) {
@@ -257,17 +253,17 @@ richDocs.prototype.deleteById = function (id, callback) {
             return callback(null, "Could not find richDocs object id:" + id);
           } else {
             
-            console.log("result.photoURL:" + result.photoURL);
-            if (!S(result.photoURL).contains(firebaseStorageBucket.trim() + "asds")) {
-              //if the photoURL is not ours immediately call the next function...
-              console.log("delete - photoURL was not in our domain:" + firebaseStorageBucket);
+            console.log("result.contentUrl:" + result.contentUrl);
+            if (!S(result.contentUrl).contains(firebaseStorageBucket.trim() + "asds")) {
+              //if the contentUrl is not ours immediately call the next function...
+              console.log("delete - contentUrl was not in our domain:" + firebaseStorageBucket);
               callback(null, result);
             } else {
-              console.log("delete - photoURL WAS in our domain");
+              console.log("delete - contentUrl WAS in our domain");
               // Create a reference to the file to delete
               /*
               TODO: Hook up Google storage to actually delete the old files...
-              var storageRef = storage.refFromUrl(result.photoURL);
+              var storageRef = storage.refFromUrl(result.contentUrl);
               // Delete the file
               storageRef.delete(
                 function (err) {
@@ -290,7 +286,7 @@ richDocs.prototype.deleteById = function (id, callback) {
 
     //Now that we've guaranteed the photoURL file is deleted, delete the FB object
     function (result, callback) {
-      console.log("starting delete of FB Object" + id + " result:" + result.photoURL);
+      console.log("starting delete of FB Object" + id + " result:" + result.contentUrl);
 
       ref.remove(
         function (err) {
@@ -350,13 +346,15 @@ Expose as one function inputFile, firebaseKey {can be null}, {user:userid, first
 
 */
 
-//function parsePhoto(photoURL, fireBaseKey, user, options, callback) {
-richDocs.prototype.parsePhoto = function (photoURL, firebaseKey, user, options, callback) {
+//function parseRichDoc(richDocL, fireBaseKey, user, options, callback) {
+richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options, callback) {
 
-  //photoURL = "https://storage.googleapis.com/babarichdocs/archpass.jpg";  
-  if (!photoURL) {
-    callback("richDocs.parsePhoto(photoURL) is not defined");
-  }  
+  //richDoc.contentUrl = "https://storage.googleapis.com/babarichdocs/archpass.jpg";  
+  if (!richDoc || !richDoc.contentUrl) {
+    callback("richDocs.parseRichDoc(richDoc) is not defined");
+  } else if (!richDoc.contentType) {
+    callback("richDocs.parseRichDoc(richDoc.contentType) is not defined");
+  }
 
   options = options || {
     verbose: null,
@@ -368,18 +366,32 @@ richDocs.prototype.parsePhoto = function (photoURL, firebaseKey, user, options, 
 
   user = user || {};
 
+  var media = "document";
+  //Android records audio as video/mp4.
+  if (S(richDoc.contentType).contains("audio") || S(richDoc.contentType).contains("video/mp4")) {
+    media = "voiceClip;"
+  } 
   var result = {
     success: false,
     user: user,
-    photoURL: photoURL,
+    contentUrl: richDoc.contentUrl,
+    contentType: richDoc.contentType,
+    media: media, //document or voiceClip or CV or selfie
     facePhotoURL: "",
     nameMatch: null,
     document: {
       summary: "",
+      hint: richDoc.documentHint || null,
       type: null,
       hasFace: null,
       humanVerified: null,
       user: { firstName: '', lastName: '', location: { stateName: null } }
+    },
+    voiceClip: {
+      matchPhrase: richDoc.matchPhrase || null,
+      recognizedText: null,
+      bestRecognizedDialect: "",
+      matchScore: 0
     },
     googleData: {
       summaryText: null,
@@ -393,47 +405,75 @@ richDocs.prototype.parsePhoto = function (photoURL, firebaseKey, user, options, 
   //for offline testing
   if (options.offline) return finallyRun(options, result, callback);
   
-  console.log("starting parsePhoto firebaseBay" + firebaseKey +  " photoURL:"+ photoURL);
+  console.log("starting parseRichDoc firebaseBay" + firebaseKey +  " contentUrl:"+ richDoc.contentUrl);
+
+  
 
   async.waterfall([
     function (callback) {
 
-      detectText(photoURL, function (err, texts) {
-        console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
-        if (err) {
-          return callback(err);
-        }
-        if (!texts) {
-          result.err = err;
-          return callback(err, result);
-        }
+      if (media == "voiceClip") {
+        result.success = true;
 
-        var summary = texts[0];
-        result.googleData.summaryText = summary;
-        if (options.verbose) {
-          result.googleData.fullText = texts;
-        }  
-
-        result.nameMatch = matchName(user.firstName, user.lastName, summary);
+        //TODO: 
+        /*
+          Call cloudConvert to save and convert.
+          Call Google Speech API with 16000 or 8000 sample rate, depending on content type
+          Try both en-US and en-IN
+          Assess how well the recording matches the matchphrase and then write a score and summary.
+          Set dialect
         
-        //console.log("nameMatch:" + result.nameMatch);
-
-        result = detectIDDocument(summary, result);
-          
-        //update the summary text with the name match results.
-        result.document.summary = updateSummaryforMatchName(result.nameMatch, user, result.document.summary );
-
-        //set success to true if we found a known document pattern.
-        if (result.document.type) {
-          result.success = true;
-        }
+        cloudconvert API key
+        //uxxiWKnVTQ-j100gNxgJcrSSzxw7AnD-N73YhOn03CKg-nHbHS0un6mjtY8zBhSsg4KDLfu7t9nL7UKRiaYl5w
+        
+        */
 
 
 
-
-        //callback before close
+         //callback before close
         callback(null, result);
-      })
+
+      }
+      else {  
+        //document detection...
+  
+        
+        
+        detectText(richDoc.contentUrl, function (err, texts) {
+          console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
+          if (err) {
+            return callback(err);
+          }
+          if (!texts) {
+            result.err = err;
+            return callback(err, result);
+          }
+
+          var summary = texts[0];
+          result.googleData.summaryText = summary;
+          if (options.verbose) {
+            result.googleData.fullText = texts;
+          }
+
+          result.nameMatch = matchName(user.firstName, user.lastName, summary);
+        
+          //console.log("nameMatch:" + result.nameMatch);
+
+          result = detectIDDocument(summary, result);
+          
+          //update the summary text with the name match results.
+          result.document.summary = updateSummaryforMatchName(result.nameMatch, user, result.document.summary);
+
+          //set success to true if we found a known document pattern.
+          if (result.document.type) {
+            result.success = true;
+          }
+
+          //callback before close
+          callback(null, result);
+        })
+      }   
+
     },
     //OPTIONAL FEATURES
     function (result, callback) {
@@ -509,15 +549,27 @@ richDocs.prototype.parsePhoto = function (photoURL, firebaseKey, user, options, 
 }        
 
 function finallyRun(options, result, callback) {
-    //strip the google data...
-    if (!options.verbose && result && result.googleData) {
-      result.googleData.fullText = "";
-      result.googleData.face = "";
-      result.googleData.languageEntities = "";
+  //strip the google data...
+  if (!options.verbose && result && result.googleData) {
+    result.googleData.fullText = "";
+    result.googleData.face = "";
+    result.googleData.languageEntities = "";
+  }
+
+
+  if (result.document.hint) {
+    if (result.success) {
+      //if document type == hint...
+      //take name match into account
+      result.document.summary = "Verified: " + result.document.summary;
+    } else {
+      result.document.summary = result.document.hint + (result.document.summary ? ". Verified: " + result.document.summary : "");
     }
-    //finally print the result
-    //console.log("parsePhoto result:" + JSON.stringify(result, null, 2));    
-    callback(null, result);
+  }  
+
+  //finally print the result
+  //console.log("parseRichDoc result:" + JSON.stringify(result, null, 2));    
+  callback(null, result);
 } 
 
 /*

@@ -99,8 +99,10 @@ router.delete('/richdocs/:id', function(req, res, next) {
 router.post('/richdocs', function (req, res, next) {
 
   var user = {};
-  if (req.body.firstName == null || req.body.lastName == null || req.body.userid == null) {
-    res.send("Params missing: firstName, lastName or userid");
+  if (req.body.firstName == null || req.body.lastName == null || req.body.userid == null
+    || req.body.contentType == null || req.body.contentUrl == null
+  ) {
+    res.send("Params missing: firstName, lastName or userid, contentType, contentUrl");
   } else {
 
     user.firstName = req.body.firstName;
@@ -109,14 +111,26 @@ router.post('/richdocs', function (req, res, next) {
     user.userid = req.body.userid;
 
     //var fileURL = "http://www.fingerprintsscanner.com/wp-content/uploads/2013/10/Biometric-Driving-Licence5.jpg"
-    var fileURL = req.body.photoURL;
+    var richDoc = {};
+    richDoc.contentUrl = req.body.contentUrl;
+    richDoc.contentType = req.body.contentType || "image";
+
+    if (req.body.matchPhrase) {
+      richDoc.matchPhrase = req.body.matchPhrase || "";
+    }
+
+    if (req.body.documentHint) {
+      richDoc.documentHint = req.body.documentHint || "";
+    }
+
+
 
     var options = {};
     options.findFace = false;
     options.verbose = false;
     options.offline = false;
       
-    richDocs.parsePhoto(fileURL, null, user, options,
+    richDocs.parseRichDoc(richDoc, null, user, options,
       function (err, result) {
         if (err) {
           res.send(JSON.stringify(err));
@@ -139,22 +153,38 @@ router.put('/richdocs/:id', function (req, res, next) {
     
     var user = {};
 
-    if (req.body.firstName == null || req.body.lastName == null || req.body.userid == null) {
-      res.send("Params missing: firstName, lastName or userid");
-    } else {
+    if (req.body.firstName == null || req.body.lastName == null || req.body.userid == null
+      || req.body.contentType == null || req.body.contentUrl == null
+    ) {
+      res.send("Params missing: firstName, lastName or userid, contentType, contentUrl");
+    }
+    else {
       user.firstName = req.body.firstName;
       user.lastName = req.body.lastName;
       user.userid = req.body.userid;
     
-      var fileURL = req.body.photoURL;
-      console.log("PUT:" + fileURL);
+      var richDoc = {};
+      richDoc.contentUrl = req.body.contentUrl;
+      richDoc.contentType = req.body.contentType || "image";
+
+   
+      if (req.body.matchPhrase) {
+        richDoc.matchPhrase = req.body.matchPhrase || "";
+      }
+
+      if (req.body.documentHint) {
+        richDoc.documentHint = req.body.documentHint || "";
+      }
+        
+      console.log("PUT:" + richDoc.contentUrl);
+
 
       var options = {};
       options.findFace = false;
       options.verbose = false;
       options.offline = false;
 
-      richDocs.parsePhoto(fileURL, firebaseKey, user, options,
+      richDocs.parseRichDoc(richDoc, firebaseKey, user, options,
         function (err, result) {
           if (err) {
             res.send(JSON.stringify(err));

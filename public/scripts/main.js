@@ -139,7 +139,7 @@ FriendlyChat.prototype.loadMessages = function() {
       "summaryText": "FORM 7\nDOI 20/03/2014\nDL No. KA05 20140006565\nSee Rule 16(2)\nNAME\nSYED SALMAN PASHA\nB.G. O+\nD.O.B 01/02/1994\n19/08/2018(TR)\nVALID TILL 19/03/2034(NT)\nBADGE NO 3423 CAB\nVALID THROUGHOUT INDIA\n20/03/2014\nCOV: LMV\nLMVCAB 20/08/2015\nS/o\nBAB JAN\nADDRESS\n#55, 1ST CROSS, SARSBANDE PLAYA, BSK\nBENGALURU (RDS) 560082\nSign. Of Holder\nSign. Licencing Authority\nBENGAL URU(S)\n"
     },
     "nameMatch": "firstAndLast",
-    "photoURL": "https://firebasestorage.googleapis.com/v0/b/babajob-dd6d9.appspot.com/o/10001%2F1473987451169%2FSyed%20DL.jpg?alt=media&token=dd4a1ab0-8322-4aee-8f0f-89ada8e17654",
+    "contentURL": "https://firebasestorage.googleapis.com/v0/b/babajob-dd6d9.appspot.com/o/10001%2F1473987451169%2FSyed%20DL.jpg?alt=media&token=dd4a1ab0-8322-4aee-8f0f-89ada8e17654",
     "success": true,
     "user": {
       "firstName": "Syed",
@@ -153,7 +153,7 @@ FriendlyChat.prototype.loadMessages = function() {
     if (val.document && val.document.type) {
       this.uploadedDocArray.push(val.document.type);//add to collection...
     }
-    this.displayMessage(data.key, val.document.summary, '', val.facePhotoURL, val.photoURL);
+    this.displayMessage(data.key, val.document.summary, '', val.facePhotoURL, val.contentUrl);
     
   }.bind(this);
   this.messagesRef.limitToLast(12).on('child_added', setMessage);
@@ -275,7 +275,8 @@ FriendlyChat.prototype.saveImageMessage = function (event) {
       type: "Analyzing..."
     },
     nameMatch: '',
-    photoURL: FriendlyChat.LOADING_IMAGE_URL, // '',
+    contentUrl: FriendlyChat.LOADING_IMAGE_URL, // '',
+    contentType: "image",
     facePhotoURL: '/images/profile_placeholder.png'
   }
 
@@ -335,7 +336,7 @@ FriendlyChat.prototype.saveImageMessage = function (event) {
       var filePath = uploadTask.snapshot.metadata.fullPath;
       var refPath = this.storage.ref(filePath).toString();
       //data.update({ imageUrl: this.storage.ref(filePath).toString() });
-      newDocRef.update({ photoURL: refPath });
+      newDocRef.update({ contentUrl: refPath, 'contentType': file.type });
         
       var betterPhotoPath;
         
@@ -345,10 +346,13 @@ FriendlyChat.prototype.saveImageMessage = function (event) {
         console.log("refPath " + betterPhotoPath);
         //Now call PUT to the RichDocs API to parse
         var firebaseKey = newDocKey; //data.key;
-        var putData = { firstName: passedUser.firstName, lastName: passedUser.lastName, userid: passedUser.userid, photoURL: betterPhotoPath };
+        var putData = {
+          firstName: passedUser.firstName, lastName: passedUser.lastName,
+          userid: passedUser.userid, contentUrl: betterPhotoPath, contentType: file.type
+        };
         //firstname, lastName, filePath
         $.ajax({
-          url: '/api/richdocs/' + firebaseKey,
+          url: '../api/richdocs/' + firebaseKey,
           type: 'put',
           contentType: 'application/x-www-form-urlencoded',
           data: putData,
@@ -583,7 +587,7 @@ function deleteFireBase(element) {
     console.log("deleting userid and id", userid, elementIdChanged);
 
     $.ajax({
-      url: '/api/richdocs/' + userid + '/' + elementIdChanged,
+      url: '../api/richdocs/' + userid + '/' + elementIdChanged,
       type: 'delete',
       contentType: 'application/x-www-form-urlencoded',
       success: function (result) {
