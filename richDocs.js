@@ -62,6 +62,12 @@ var vision = Vision();
 var language = require('@google-cloud/language')();
 // [END import_libraries]
 
+//for speech reco
+const fs = require('fs');
+const record = require('node-record-lpcm16');
+const speech = require('@google-cloud/speech')();
+var cloudconvert = new (require('cloudconvert'))('uxxiWKnVTQ-j100gNxgJcrSSzxw7AnD-N73YhOn03CKg-nHbHS0un6mjtY8zBhSsg4KDLfu7t9nL7UKRiaYl5w');
+
 //async lib
 var async = require("async");
 
@@ -369,8 +375,8 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
   var media = "document";
   //Android records audio as video/mp4.
   if (S(richDoc.contentType).contains("audio") || S(richDoc.contentType).contains("video/mp4")) {
-    media = "voiceClip;"
-  } 
+    media = "voiceClip"
+  }
   var result = {
     success: false,
     user: user,
@@ -388,10 +394,19 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       user: { firstName: '', lastName: '', location: { stateName: null } }
     },
     voiceClip: {
-      matchPhrase: richDoc.matchPhrase || null,
-      recognizedText: null,
-      bestRecognizedDialect: "",
-      matchScore: 0
+      matchPhrase: richDoc.matchPhrase || "",
+      convertedUrl: null,
+      bestReco: null,
+      recos: [
+      /*
+        {
+          dialect: "en-US",
+          recognizedText: "",
+          matchScore: 0,
+        engine: "Google"
+        }
+*/
+      ]
     },
     googleData: {
       summaryText: null,
@@ -402,20 +417,26 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     err: null
   }
 
+/*
+  "matchPhrase": "I'm an honest and hard worker and I'd love to work for you.",
+    "recognizedText": "I'm on this too hard worker and I'd love to work for you.",
+    "bestRecognizedDialect": "",
+    "matchScore": 84.61538461538461,
+    "convertedUrl": "gs://voiceclips/BJ10001-1478080840.56.flac",
+    "recognizedDialect": "en-US"
+  },  
+*/
+
   //for offline testing
   if (options.offline) return finallyRun(options, result, callback);
   
-  console.log("starting parseRichDoc firebaseBay" + firebaseKey +  " contentUrl:"+ richDoc.contentUrl);
+  console.log("starting parseRichDoc firebaseBay" + firebaseKey + " contentUrl:" + richDoc.contentUrl);
 
   
 
-  async.waterfall([
-    function (callback) {
+  if (media == "voiceClip") {
 
-      if (media == "voiceClip") {
-        result.success = true;
-
-        //TODO: 
+    //TODO: 
         /*
           Call cloudConvert to save and convert.
           Call Google Speech API with 16000 or 8000 sample rate, depending on content type
@@ -427,18 +448,196 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         //uxxiWKnVTQ-j100gNxgJcrSSzxw7AnD-N73YhOn03CKg-nHbHS0un6mjtY8zBhSsg4KDLfu7t9nL7UKRiaYl5w
         
         */
+        
 
+    //var isAndroid = true;
+        
+    var sampleRate = result.contentType == "audio/aac" ? 8000 : 16000;
+    var inputformat = result.contentType == "audio/aac" ? "aac" : "mp4";
+    //"97PGVNRzXy", android
+    //"YVWo9XiePj", //iphone
+    var preset = result.contentType == "audio/aac" ? "YVWo9XiePj" : "97PGVNRzXy";
+    
+    var seconds = new Date().getTime() / 1000;
+    var gsVoiceFileName = result.user.userid + "-" + seconds + ".flac";  
+    var gsBucketPath = "gs://voiceclips/";
+    var gsPath = gsBucketPath + gsVoiceFileName;
 
+    
+    async.waterfall([
 
-         //callback before close
-        callback(null, result);
+      function (callback) {
+        //Call cloudConvert to save and convert.
 
-      }
-      else {  
-        //document detection...
+        cloudconvert.convert({
+          "inputformat": inputformat,
+          "outputformat": "flac",
+          "input": "download",
+          //"file": "https://cdn.fbsbx.com/v/t59.3654-21/14931650_10154439492671084_6156889271547461632_n.aac/audioclip-1477943008722-4096.aac?oh=9bc5ab0fba4ee79b63e8466b6ab93fcb&oe=58194C96",
+          "file": result.contentUrl,
+          "preset": preset,
+          "timeout": 0,
+          "output": {
+            "googlecloud": {
+              "projectid": "babarichdocs",
+              "bucket": "voiceclips",
+              "credentials": {
+                "type": "service_account",
+                "project_id": "babarichdocs",
+                "private_key_id": "50165174d770a31345fa33c9022f55d4780b3d88",
+                "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7U93EcXw8toUC\nuH2+dI7o95AQvMiX8cNo69UFQFcHo3yC2pzXCvU5usJYkAWEF4SSrm31SeJXToX8\nPmvY5dc5HVDv84PcPHT3l1iHrebn++iSJ7+GS5p0HfOKXMWdtv2o5b7VPL1lQ/kE\nftOpn/U6ICTh1AWIbUtqLx6vT3P3pfI85wUFl863UXpvSqzqB7Lbk/0/SHDrxSsM\n4WDJ1Q4uK2+cpRjckqE1VHhg0mYR9WeQahT3F6VemZ1xbSgLUxYpK6tdznA0mCDf\ncopqE5f/HrGNFuaVoCjfKf4A8qYm+9ebxuYziu2EOMYeE80w8UDk3R2d2qYm9wTx\n3IpEorqpAgMBAAECggEBALnrHqsdRwSq0ZBFsucXn86wBZfXBe9nz12O0jkIBlha\ndfUZK5hyE7hcFw72wcK75KP/4roTvkSQdoJHIZp/YwAYjH/Z3AD1L9GbsA3ZFtcf\nOU/1iyyqVHzyTQgB01AYkeDTRHc2dXLP55ICneg4DZbG2FQZrfQdJUAZzAaKgLpD\nkSuxkwOo645Tgl2VIIkCBO0X6z8Y7MKmTjoHmj1cphSyiDpJtyuMHlDLrpBylJLH\nuE/JTGzYBLxx1j5aPKB23vbV09EKF+Sit26BU9rzSbJIeO0PxKuugq8QgepPsd5O\nOKr9470DMMBNijAPqza3Urs2ngaIWz2JPrbgxuN8UFECgYEA68eQOdzkEadH/No7\nxJzym8HjdG16YuFQzQ/kXy82QujAb6WArb1GWF1Fk2HiUJ7p7SObO+IduK4xxfhx\nvHhEdszdGD+A3am5PnhgfBey0Ay+p3TfFG33u33BwjwZViOUCvRbk4KoKya4dcJb\nGjVIrZ7OALrXmTRXFQu8LTBwaJsCgYEAy2SPzgT3H1mv+Njdu60vO2ha39oNvJJO\nZCBzVL1uz5xplE9sI4Bjl8bXz8YFjbDF0XSQJFuBBsILKqyyVB9In2att1EBGqW3\n31wABUzC18MzNLibX8BWrefXaHPoJFV1Z9RvR5CZyFmCWcg7Yt9Pjr7R2ekkc12Q\n+ucm18O4dAsCgYARsXobPX5H7Nu0F9RgXr69/YDKHeUPQoVDviuPEQXrY3f9aNgN\nMaTzwJwWAURwdFxtlTxy8/bzAu9tQcWXNRc+KwV0al+LQs9J5tKmvUiH4Ez2WAjd\niZsLkNZXcxcbpbPYVpoAqc9g3Zj+DUW048a+cKpY16ySLKFUTPskEPx+fQKBgBb0\nDlaNsOXU1UscDknzzXTC3h6NGSfCyx35m4pgpnS/jhqyq92Fy7eBNTG5gz7uSCTP\nJsUznmgI1gHG44kizqtOhyQ8/Abp1MpcM5RliUeYO9sjSkWQCzgtBd4/1l7jVhCV\npMlKxFAb6d3//tO1p+DQIBabfQWX9ZibJYMMD3DpAoGBAJCk+6Afi7q2tMzv7oAJ\n/7IqSbIKYdhuPOZdDz1unaqDKvsEIejn8K5mWRF2Ga+96pdS9C+E3vu7crbucNT9\nXKlYpjqH23mrTqKWCQhl6xwCpdrqy9lQ3Hlm6EciNdSOjM68RXw5QVF9/lcj1r/W\nygnUqaZqKskNq3SYncc2bOwa\n-----END PRIVATE KEY-----\n",
+                "client_email": "ocrphotos@babarichdocs.iam.gserviceaccount.com",
+                "client_id": "111747215326020811004",
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://accounts.google.com/o/oauth2/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ocrphotos%40babarichdocs.iam.gserviceaccount.com"
+              },
+              "path": gsVoiceFileName
+            }
+          },
+          "save": true
+        },
+          (err, process) => {
+            //process is the terminology of cloudconvert...
+            //function (err, process) {
+            var err;
+            if (err) {
+              console.log("We had an error in cloudconvert: err");
+              return callback(err);
+            }
+            
+            //hack around the fact that the cloud library fires multiple calls...
+            if (result.voiceClip.convertedUrl != gsPath) {
+              console.log("Process:" + process.data.message); 
+              result.voiceClip.convertedUrl = gsPath;
+              callback(null, result);
+            }  
+            //console.log("Process:" + process.data.message); 
+            //console.log("Process" + util.inspect(process, { showHidden: false, depth: null }));
+      
+            
+            //console.log("Ending cloudConvert...");
+            //
+          }
+        );
+      },
+
+/*      
+      matchPhrase: richDoc.matchPhrase || "",
+      convertedUrl: null,
+      bestRecognizedDialect: "",
+      bestRecognizedText: "",
+      bestMatchScore: 0,
+      recos: [      
+        {
+          dialect: "en-US",
+          recognizedText: "",
+          matchScore: 0,
+        }
+      ]
+      */
+
+         //var pathToFile;
+        //pathToFile = gsPath;
+        //pathToFile = "gs://voiceclips/BJ10001-1477949425.848.flac";
+        
+        // [START speech_sync_recognize]
+      
+      //Reco in en-US
+      function (result, callback) {
+        var dialect = 'en-US';
+        
+        console.log("Starting reco in " + dialect);
+     
+        speech.recognize(gsPath, {
+          encoding: 'FLAC',
+          sampleRate: sampleRate,   //iphone 8000, android 16000
+          languageCode: dialect
+        }, (err, foundWords) => {
+          if (err) {
+            console.log("reco error...", err);
+            return callback(err);
+          }
+
+          result.success = true;
+          saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
+          console.log('Reco Results in ' + dialect, foundWords);
+          callback(null, result);
+        });
+      },
   
+      //Reco in en-IN
+      function (result, callback) {
+        var dialect = 'en-IN';
         
-        
+        console.log("Starting reco in " + dialect);
+     
+        speech.recognize(gsPath, {
+          encoding: 'FLAC',
+          sampleRate: sampleRate,   //iphone 8000, android 16000
+          languageCode: dialect
+        }, (err, foundWords) => {
+          if (err) {
+            console.log("reco error...", err);
+            return callback(err);
+          }
+
+          result.success = true;
+          saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
+          console.log('Reco Results in ' + dialect, foundWords);
+          callback(null, result);
+        });
+      },
+      
+
+      //Save result to firebase
+      function (result, callback) {
+        console.log("Saving to Firebase...");
+      
+        var ref = firebase.database().ref();
+
+        // Get a key for a new richDoc if firebaseKey is not null
+        var newDocKey = firebaseKey || ref.child(richdocsDB).push().key;
+
+        // Write the new post's data simultaneously in the richDoc lists and create fast indexes by userid, Aadhaar. 
+        var updates = {};
+        updates['/' + richdocsDB + '/all/' + newDocKey] = result;
+        if (result.user) {
+          if (result.user.userid) {
+            updates['/' + richdocsDB + '/by-userid/' + result.user.userid + '/' + newDocKey] = result;
+          }
+          if (result.document.user.aadhaarNumber) {
+            updates['/' + richdocsDB + '/by-aadhaar/' + result.document.user.aadhaarNumber + '/' + newDocKey] = result;
+          }
+        }
+      
+        console.log("about to save to firebase richdoc result" + util.inspect(result, { showHidden: false, depth: null }));
+      
+        ref.update(updates, function (err) {
+          if (err) {
+            return callback(err, result);
+          } else {
+            callback(null, result);
+          }
+        });
+      }
+    ],
+      function (err, result) {
+        if (err) {
+          return callback(err, result);
+        } else {
+          console.log("Running end of speech");
+          finallyRunSpeech(result);
+          callback(null, result);
+        }
+      }
+    )
+  }
+  else {
+    //document detection...
+    async.waterfall([
+      function (callback) {
         detectText(richDoc.contentUrl, function (err, texts) {
           console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
           if (err) {
@@ -472,80 +671,81 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           //callback before close
           callback(null, result);
         })
-      }   
+         
 
-    },
-    //OPTIONAL FEATURES
-    function (result, callback) {
-      //the face in the photo
-      if (!options.findFace) {
-        callback(null, result);
-      }
-      else {
-        console.log("Finding face...");
-        detectFace(photoURL, function (err, faces) {
-          if (err) {
-            return callback(err, result);
-          }
-          result.document.hasFace = true;
-          result.googleData.face = faces;
+      },
+      //OPTIONAL FEATURES
+      function (result, callback) {
+        //the face in the photo
+        if (!options.findFace) {
           callback(null, result);
-        });
-      }
-    },
-    function (result, callback) {
-      //find entities in the photo (usually returns nothing useful)
-      if (!options.findEntities) {
-        callback(null, result);
-      } else {
-        console.log("Finding entities...");
-        language.detectEntities(summary, function (err, entities) {
-          if (err) {
-            return callback(err, result);
-          }
-          result.googleData.languageEntities = entities;
-          console.log('Language entities:', JSON.stringify(entities, null, 2));
+        }
+        else {
+          console.log("Finding face...");
+          detectFace(photoURL, function (err, faces) {
+            if (err) {
+              return callback(err, result);
+            }
+            result.document.hasFace = true;
+            result.googleData.face = faces;
+            callback(null, result);
+          });
+        }
+      },
+      function (result, callback) {
+        //find entities in the photo (usually returns nothing useful)
+        if (!options.findEntities) {
           callback(null, result);
-        });
-      }
-    },
-    //Save result to firebase
-    function (result, callback) {
-      //console.log("Saving to Firebase...");
-      
-      var ref = firebase.database().ref();
-
-      // Get a key for a new richDoc if firebaseKey is not null
-      var newDocKey = firebaseKey || ref.child(richdocsDB).push().key;
-
-      // Write the new post's data simultaneously in the richDoc lists and create fast indexes by userid, Aadhaar. 
-      var updates = {};
-      updates['/' + richdocsDB + '/all/' + newDocKey] = result;
-      if (result.user) {
-        if (result.user.userid) {
-          updates['/' + richdocsDB + '/by-userid/' + result.user.userid + '/' + newDocKey] = result;
-        }
-        if (result.document.user.aadhaarNumber) {
-          updates['/' + richdocsDB + '/by-aadhaar/' + result.document.user.aadhaarNumber + '/' + newDocKey] = result;
-        }
-      }
-
-      
-      console.log("about to save to firebase richdoc result" + util.inspect(result, { showHidden: false, depth: null }));
-      
-      ref.update(updates, function (err) {
-        if (err) {
-          return callback(err, result);
         } else {
-          callback(null, result);
+          console.log("Finding entities...");
+          language.detectEntities(summary, function (err, entities) {
+            if (err) {
+              return callback(err, result);
+            }
+            result.googleData.languageEntities = entities;
+            console.log('Language entities:', JSON.stringify(entities, null, 2));
+            callback(null, result);
+          });
         }
-      });
-    }
-  ],
-    function (err, result) {
-      finallyRun(options, result, callback)
-    }
-  )
+      },
+      //Save result to firebase
+      function (result, callback) {
+        //console.log("Saving to Firebase...");
+      
+        var ref = firebase.database().ref();
+
+        // Get a key for a new richDoc if firebaseKey is not null
+        var newDocKey = firebaseKey || ref.child(richdocsDB).push().key;
+
+        // Write the new post's data simultaneously in the richDoc lists and create fast indexes by userid, Aadhaar. 
+        var updates = {};
+        updates['/' + richdocsDB + '/all/' + newDocKey] = result;
+        if (result.user) {
+          if (result.user.userid) {
+            updates['/' + richdocsDB + '/by-userid/' + result.user.userid + '/' + newDocKey] = result;
+          }
+          if (result.document.user.aadhaarNumber) {
+            updates['/' + richdocsDB + '/by-aadhaar/' + result.document.user.aadhaarNumber + '/' + newDocKey] = result;
+          }
+        }
+
+      
+        console.log("about to save to firebase richdoc result" + util.inspect(result, { showHidden: false, depth: null }));
+      
+        ref.update(updates, function (err) {
+          if (err) {
+            return callback(err, result);
+          } else {
+            callback(null, result);
+          }
+        });
+      }
+    ],
+      function (err, result) {
+        finallyRun(options, result, callback)
+      }
+    )
+  }
 }        
 
 function finallyRun(options, result, callback) {
@@ -555,7 +755,6 @@ function finallyRun(options, result, callback) {
     result.googleData.face = "";
     result.googleData.languageEntities = "";
   }
-
 
   if (result.document.hint) {
     if (result.success) {
@@ -571,6 +770,61 @@ function finallyRun(options, result, callback) {
   //console.log("parseRichDoc result:" + JSON.stringify(result, null, 2));    
   callback(null, result);
 } 
+
+function saveRecoForDialect(result, dialect, desiredPhrase, detectedWords) {
+  var desiredArray = desiredPhrase.split(' ');
+  var detectedArray = detectedWords.split(' ');
+  var missingWords = desiredArray.diff(detectedArray);
+
+  var score = 100 * ((desiredArray.length - missingWords.length) / desiredArray.length);
+ 
+  var reco = {};
+  reco.dialect = dialect;
+  reco.recognizedText = detectedWords;
+  reco.matchScore = score;
+  reco.engine = "Google";
+
+  result.voiceClip.recos.push(reco);
+}
+
+function finallyRunSpeech(result) {
+  /*
+    {
+      dialect: "en-US",
+      recognizedText: "",
+      matchScore: 0,
+    }
+*/
+
+    
+  var bestMatchScore = 0;
+  var bestRecoItemNumber = -1;
+  var bestReco;
+  for (var i = 0; i < result.voiceClip.recos.length; i++) {
+    var score = result.voiceClip.recos[i].matchScore
+    if (score > bestMatchScore) {
+      bestRecoItemNumber = i;
+      bestMatchScore = score;
+    }
+  }
+  console.log("Finished Reco Loop" + bestRecoItemNumber);
+  if (bestRecoItemNumber >= 0) {
+    console.log("Saving Best Reco;;;");
+    bestReco = result.voiceClip.recos[bestRecoItemNumber];
+    result.voiceClip.bestReco = bestReco;
+
+    if (bestReco.matchScore > 80) {
+          result.document.summary = "You speak " + (bestReco.dialect == "en-US" ? "US" : "Indian") + " English very well. "
+    }    
+
+    result.document.summary +=
+      "Your English Score in " + bestReco.dialect + " is: " + bestReco.matchScore + ". We heard:" + bestReco.recognizedText;
+  }
+}
+
+Array.prototype.diff = function(a) {
+    return this.filter(function(i) {return a.indexOf(i) < 0;});
+};
 
 /*
 
