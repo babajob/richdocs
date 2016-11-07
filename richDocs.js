@@ -435,7 +435,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
   
 
   if (media == "voiceClip") {
-
+    var callBackCounter = 0;
     //TODO: 
         /*
           Call cloudConvert to save and convert.
@@ -508,14 +508,17 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
             }
             
             //hack around the fact that the cloud library fires multiple calls...
-            if (result.voiceClip.convertedUrl != gsPath) {
-              console.log("Process:" + process.data.message); 
+            callBackCounter++;
+            console.log("Process Counter: " + callBackCounter);
+            console.log("Process.data" + util.inspect(process.data, { showHidden: false, depth: null }));
+
+            if (callBackCounter == 2 && result.voiceClip.convertedUrl != gsPath) {
+              //console.log("Process.data" + util.inspect(process.data, { showHidden: false, depth: null }));
               result.voiceClip.convertedUrl = gsPath;
               callback(null, result);
             }  
             //console.log("Process:" + process.data.message); 
-            //console.log("Process" + util.inspect(process, { showHidden: false, depth: null }));
-      
+            
             
             //console.log("Ending cloudConvert...");
             //
@@ -813,12 +816,15 @@ function finallyRunSpeech(result) {
     bestReco = result.voiceClip.recos[bestRecoItemNumber];
     result.voiceClip.bestReco = bestReco;
 
+    var naturalDialect = (bestReco.dialect == "en-US" ? "US" : "Indian"); 
     if (bestReco.matchScore > 80) {
-          result.document.summary = "You speak " + (bestReco.dialect == "en-US" ? "US" : "Indian") + " English very well. "
+          result.document.summary = "You speak " + naturalDialect + " English very well. "
     }    
 
+    var simpleScore = bestReco.matchScore + " ";
+    simpleScore = simpleScore.split('.')[0] + "%";    
     result.document.summary +=
-      "Your English Score in " + bestReco.dialect + " is: " + bestReco.matchScore + ". We heard:" + bestReco.recognizedText;
+      "Your " + naturalDialect + " English Score is: " + simpleScore + ". We heard: " + bestReco.recognizedText;
   }
 }
 
