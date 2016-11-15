@@ -935,11 +935,11 @@ function detectIDDocument(texts, result) {
   //PALSLIP 
   //comes at top because it has much of the other data below...
   if (
-     findText("pay slip", texts) || findText("payslip", texts) || findText("salaryslip", texts) || findText("salary slip", texts)
+    findText("pay slip", texts) || findText("payslip", texts) || findText("salaryslip", texts) || findText("salary slip", texts)
   ) {
     result.document.type = "PaySlip";
     result.document.summary += result.document.type + " ";
-  } 
+  }
     
   //PASSPORT
   else if (
@@ -983,7 +983,7 @@ function detectIDDocument(texts, result) {
       result.document.user.PANumber = panMatches[0];
       result.document.summary += panMatches[0] + " ";
     } else {
-      var noSpaces = S(texts).replaceAll(' ', '').s; 
+      var noSpaces = S(texts).replaceAll(' ', '').s;
       panMatches = noSpaces.match(panRegex);
       if (panMatches != null && panMatches.length > 0) {
         result.document.user.PANumber = panMatches[0];
@@ -1006,7 +1006,9 @@ function detectIDDocument(texts, result) {
     }
   }
   //Aadhaar Card
-  else if (findText("Aadhaar", texts) || findText("UID", texts)) {
+  else if (findText("Aadhaar", texts) || findText("UID", texts)
+    || texts.match(/(\d\d\d\d)(\ )(\d\d\d\d)(\ )(\d\d\d\d)/g)
+  ) {
     result.document.type = "AadhaarCard";
     result.document.summary += result.document.type + " ";
     
@@ -1053,15 +1055,14 @@ function detectIDDocument(texts, result) {
 
       
   //All Card scanning...
-  if (findText("male", texts)) {
+  if (findText("female", texts)) {
+    result.document.user.gender = "Female";
+    result.document.summary += "Female" + " ";
+  } else if (findText("male", texts)) {
     result.document.user.gender = "Male";
     result.document.summary += "Male" + " ";
   }
 
-  if (findText("female", texts)) {
-    result.document.user.gender = "Female";
-    result.document.summary += "Female" + " ";
-  }
 
   //find the date of birth
   if (result.document.user.DOB == null) {
