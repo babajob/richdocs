@@ -463,6 +463,9 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     var gsBucketPath = "gs://voiceclips/";
     var gsPath = gsBucketPath + gsVoiceFileName;
 
+    var highestScore = 0;
+    var completedFirstReco = false;
+
     
     async.waterfall([
 
@@ -502,17 +505,18 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
             //process is the terminology of cloudconvert...
             //function (err, process) {
             var err;
-            if (err) {
-              console.log("We had an error in cloudconvert: err");
+            callBackCounter++;
+            if (err && callBackCounter == 1) {
+              console.log("We had an error in cloudconvert:",err);
               return callback(err);
             }
             
             //hack around the fact that the cloud library fires multiple calls...
-            callBackCounter++;
+            
             console.log("Process Counter: " + callBackCounter);
             console.log("Process.data" + util.inspect(process.data, { showHidden: false, depth: null }));
 
-            if (callBackCounter == 2 && result.voiceClip.convertedUrl != gsPath) {
+            if (callBackCounter == 1 && result.voiceClip.convertedUrl != gsPath) {
               //console.log("Process.data" + util.inspect(process.data, { showHidden: false, depth: null }));
               result.voiceClip.convertedUrl = gsPath;
               callback(null, result);
@@ -549,9 +553,9 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       
       //Reco in en-US
       function (result, callback) {
-        var dialect = 'en-US';
+        var dialect = 'en-IN';
         
-        console.log("Starting reco in " + dialect);
+        console.log("Starting first reco in " + dialect);
      
         speech.recognize(gsPath, {
           encoding: 'FLAC',
@@ -559,10 +563,11 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           languageCode: dialect
         }, (err, foundWords) => {
           if (err) {
-            console.log("reco error...", err);
-            return callback(err);
+            console.log("reco error in en-IN first time...", err);
+            callback(null, result); //try again...
+            //return callback(err);  
           }
-
+          completedFirstReco = true;
           result.success = true;
           saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
           console.log('Reco Results in ' + dialect, foundWords);
@@ -570,27 +575,63 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         });
       },
   
-      //Reco in en-IN
+      //Reco in en-IN 2nd time...
       function (result, callback) {
         var dialect = 'en-IN';
-        
-        console.log("Starting reco in " + dialect);
-     
-        speech.recognize(gsPath, {
-          encoding: 'FLAC',
-          sampleRate: sampleRate,   //iphone 8000, android 16000
-          languageCode: dialect
-        }, (err, foundWords) => {
-          if (err) {
-            console.log("reco error...", err);
-            return callback(err);
-          }
 
-          result.success = true;
-          saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
-          console.log('Reco Results in ' + dialect, foundWords);
+        //First one often times out so we want to do it twice...        
+        if (completedFirstReco) {
           callback(null, result);
-        });
+        } else {
+        
+          console.log("Starting 2nd reco in " + dialect);
+     
+          speech.recognize(gsPath, {
+            encoding: 'FLAC',
+            sampleRate: sampleRate,   //iphone 8000, android 16000
+            languageCode: dialect
+          }, (err, foundWords) => {
+            if (err) {
+              console.log("reco error 2nd time...", err);
+              return callback(err);
+            }
+
+            result.success = true;
+            saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
+            console.log('Reco Results in ' + dialect, foundWords);
+            callback(null, result);
+          });
+        }  
+      },
+
+      //Reco in en-US
+      function (result, callback) {
+        var dialect = 'en-US';
+
+        //don't run if Indian score is already good...
+        var indianRecoScore = getHighestRecoScore(result);
+        if (indianRecoScore > 70) {
+          callback(null, result);
+
+        } else {
+          console.log("Starting reco in " + dialect);
+     
+          speech.recognize(gsPath, {
+            encoding: 'FLAC',
+            sampleRate: sampleRate,   //iphone 8000, android 16000
+            languageCode: dialect
+          }, (err, foundWords) => {
+            if (err) {
+              console.log("reco error in en-US...", err);
+              return callback(err);
+            }
+
+            result.success = true;
+            saveRecoForDialect(result, dialect, result.voiceClip.matchPhrase, foundWords);
+            console.log('Reco Results in ' + dialect, foundWords);
+            callback(null, result);
+          });
+        }  
       },
       
 
@@ -789,6 +830,25 @@ function saveRecoForDialect(result, dialect, desiredPhrase, detectedWords) {
 
   result.voiceClip.recos.push(reco);
 }
+
+//returns the highest reco score...
+
+function getHighestRecoScore(result) {
+
+  var bestMatchScore = 0;
+  var bestRecoItemNumber = -1;
+
+  for (var i = 0; i < result.voiceClip.recos.length; i++) {
+    var score = result.voiceClip.recos[i].matchScore
+    if (score > bestMatchScore) {
+      bestRecoItemNumber = i;
+      bestMatchScore = score;
+    }
+  }
+
+  return bestMatchScore;
+}
+
 
 function finallyRunSpeech(result) {
   /*
