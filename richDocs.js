@@ -51,6 +51,12 @@ Eventual Usage
 
 'use strict';
 
+//import config file
+var config = require('./config');
+
+//request 
+var request = require("request");
+
 // [START app]
 // [START import_libraries]
 var S = require('string'); // http://stringjs.com/
@@ -391,6 +397,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       type: null,
       hasFace: null,
       humanVerified: null,
+      documentId: null,
       user: { firstName: '', lastName: '', location: { stateName: null } }
     },
     voiceClip: {
@@ -428,7 +435,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
 */
 
   //for offline testing
-  if (options.offline) return finallyRun(options, result, callback);
+  if (options.offline) return finallyRunDocs(options, result, callback);
   
   console.log("starting parseRichDoc firebaseBay" + firebaseKey + " contentUrl:" + richDoc.contentUrl);
 
@@ -703,14 +710,29 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           //console.log("nameMatch:" + result.nameMatch);
 
           result = detectIDDocument(summary, result);
-          
-          //update the summary text with the name match results.
-          result.document.summary = updateSummaryforMatchName(result.nameMatch, user, result.document.summary);
 
+          
           //set success to true if we found a known document pattern.
           if (result.document.type) {
             result.success = true;
-          }
+          }          
+
+          //update the summary text with the name match results.
+          result.document.summary = updateSummaryforMatchName(result.nameMatch, user, result.document.summary);
+
+          //Update the Summary           
+          if (result.document.hint) {
+            if (result.success) {
+              //if document type == hint...
+              //take name match into account
+              result.document.summary = "Verified: " + result.document.summary;
+            } else {
+              result.document.summary = result.document.hint + (result.document.summary ? ". Verified: " + result.document.summary : "");
+            }
+          }  
+
+  //Non-blocking async save back to Babajob
+  
 
           //callback before close
           callback(null, result);
@@ -783,32 +805,42 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
             callback(null, result);
           }
         });
-      }
+      },
+
+      //SAVE BACK TO BABAJOB
+      function (result, callback) {
+        //ensure we have auth and key...
+        if (!(user.jobSeekerId && user.accessToken)) {
+          callback(null, result);
+        }
+        else {
+          console.log("Saving to Babajob...");
+          saveRichDocToBJ(result, user.jobSeekerId, user.accessToken,
+            function (err, result) {
+              if (err) {
+                return callback(err, result);
+              } else {
+                callback(null, result);
+              }
+            });
+        }
+      }      
+
     ],
       function (err, result) {
-        finallyRun(options, result, callback)
+        finallyRunDocs(options, result, callback)
       }
     )
   }
 }        
 
-function finallyRun(options, result, callback) {
+function finallyRunDocs(options, result, callback) {
   //strip the google data...
   if (!options.verbose && result && result.googleData) {
     result.googleData.fullText = "";
     result.googleData.face = "";
     result.googleData.languageEntities = "";
   }
-
-  if (result.document.hint) {
-    if (result.success) {
-      //if document type == hint...
-      //take name match into account
-      result.document.summary = "Verified: " + result.document.summary;
-    } else {
-      result.document.summary = result.document.hint + (result.document.summary ? ". Verified: " + result.document.summary : "");
-    }
-  }  
 
   //finally print the result
   //console.log("parseRichDoc result:" + JSON.stringify(result, null, 2));    
@@ -1011,8 +1043,10 @@ function detectIDDocument(texts, result) {
     //find the passport Number
     var passportMatches = texts.match(/([A-Z])(\d\d\d\d\d\d\d)/g);
     if (passportMatches != null && passportMatches.length > 0) {
-      result.document.user.passportNumber = passportMatches[0];
-      result.document.summary += passportMatches[0] + " ";
+      let id = passportMatches[0];
+      //result.document.user.passportNumber = id;
+      result.document.summary += id + " ";
+      result.document.documentId = id;
     }
 
     //PAN Cards have a DOB... (but two other dates too...)
@@ -1040,13 +1074,13 @@ function detectIDDocument(texts, result) {
     var panRegex = /([A-Z][A-Z][A-Z][A-Z][A-Z])(\d\d\d\d)([A-Z])/g
     var panMatches = texts.match(panRegex);
     if (panMatches != null && panMatches.length > 0) {
-      result.document.user.PANumber = panMatches[0];
+      result.document.documentId = panMatches[0];
       result.document.summary += panMatches[0] + " ";
     } else {
       var noSpaces = S(texts).replaceAll(' ', '').s;
       panMatches = noSpaces.match(panRegex);
       if (panMatches != null && panMatches.length > 0) {
-        result.document.user.PANumber = panMatches[0];
+        result.document.documentId = panMatches[0];
         result.document.summary += panMatches[0] + " ";
       }
     }
@@ -1054,17 +1088,32 @@ function detectIDDocument(texts, result) {
     //PAN Cards have a DOB...
     result.document.user.DOB = findDOB(texts);
   }
-  //VoterCard
+  //VoterID
   else if (findText("election", texts) && findText("commission", texts)) {
-    result.document.type = "VoterCard";
+    result.document.type = "VoterID";
     result.document.summary += result.document.type + " ";
     //find the voterID
     var voterIDMatches = texts.match(/([A-Z][A-Z][A-Z])(\d\d\d\d\d\d\d)/g);
     if (voterIDMatches != null && voterIDMatches.length > 0) {
-      result.document.user.voterID = voterIDMatches[0];
+      result.document.documentId = voterIDMatches[0];
       result.document.summary += voterIDMatches[0] + " ";
     }
   }
+    
+  //RationCard
+  else if (findText("ration", texts) 
+  ) {
+    result.document.type = "RationCard";
+    result.document.summary += result.document.type + " ";
+    
+    //find the aadhaar number
+    var matches = texts.match(/(\d\d\d\d)(\ )(\d\d\d\d)(\ )(\d\d\d\d)/g);
+    if (matches != null && matches.length > 0) {
+      result.document.user.aadhaarNumber = matches[0];
+      result.document.summary += matches[0] + " ";
+    }
+  }
+
   //Aadhaar Card
   else if (findText("Aadhaar", texts) || findText("UID", texts)
     || texts.match(/(\d\d\d\d)(\ )(\d\d\d\d)(\ )(\d\d\d\d)/g)
@@ -1076,10 +1125,11 @@ function detectIDDocument(texts, result) {
     var matches = texts.match(/(\d\d\d\d)(\ )(\d\d\d\d)(\ )(\d\d\d\d)/g);
     if (matches != null && matches.length > 0) {
       result.document.user.aadhaarNumber = matches[0];
+      result.document.documentId = matches[0];
       result.document.summary += matches[0] + " ";
     }
   }
-  //DriverLicense
+  //DrivingLicense
   else if (
     (findText("drive", texts) || findText("driving", texts) ||
       findText("transport", texts)
@@ -1087,13 +1137,13 @@ function detectIDDocument(texts, result) {
     
     findText("DL no", texts)
   ) {
-    result.document.type = "DriverLicense";
+    result.document.type = "DrivingLicense";
     result.document.summary += result.document.type + " ";
     //find the license number
     if (state == "Maharashtra") {
       var matches = texts.match(/([A-Z][A-Z])-(\d\d\d\d\d\d\d\d\d\d\d\d\d)/g);
       if (matches != null && matches.length > 0) {
-        result.document.user.driverLicenseNumber = matches[0];
+        result.document.user.documentId = matches[0];
         result.document.summary += matches[0] + " ";
       }
     } else {
@@ -1102,7 +1152,7 @@ function detectIDDocument(texts, result) {
       // KA20 20140006565
       var matches = texts.match(/(KA)\d{2} \d{11}/g);
       if (matches != null && matches.length > 0) {
-        result.document.user.driverLicenseNumber = matches[0];
+        result.document.user.documentId = matches[0];
         result.document.summary += matches[0] + " ";
         if (!result.document.user.location.stateName || result.document.user.location.stateName == '') {
           result.document.user.location.stateName = "Karnataka";
@@ -1216,6 +1266,203 @@ function findIndianState(input, searchWithNoSpaces) {
 
 
 
+////////////////////////////////////////////////////////////////////////////
+////// SAVE RICH DOC TO BABAJOB ////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+var consumerKey = "DZdXZhkUx2qjom5YwJYc0PiBgIgcKI"; 
+
+var debugLocallyButOnProductionDB = false;
+var onProduction = debugLocallyButOnProductionDB || config.onProduction;
+var bjAPIDomain =onProduction ? "http://api.babajob.com" : "http://qa02api.babajob.com";
+//var bjWebDomain =onProduction ? "http://www.babajob.com" : "http://qa02.babajob.com";
+
+function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
+ 
+  var putData = [];
+  putData.push(getRichDocJSONForBJSave(richDocObj));
+
+  console.log("Saving RichDocs...");
+  console.log(util.inspect(putData));
+
+  if (putData.length == 0) {
+    console.log("saveRichDocToBJ: No Data to save...");
+    callback(null, richDocObj);
+  } else {
+    
+    if (!(accessToken && jobSeekerId)) {
+      console.log("saveRichDocToBJ not logged in. docs: ", util.inspect(putData));
+      callback(null, richDocObj);
+    } else {
+        //save the data to babajob...
+      
+      //TODO - change to update profile in case of CV save...
+
+      var uri = bjAPIDomain + "/v2/jobseekers/" + jobSeekerId + "/documents";
+      request({
+        uri: uri,
+        method: "POST",
+        timeout: 30000,
+        accept: "application/json",
+        contentType: "application/json",
+        headers: {
+          'Authorization': accessToken,
+          'consumer-key': consumerKey,
+        },
+        json: putData
+      }, function (error, response, body) {
+        if (error) {
+          handleError("saveRichDocToBJ", error, putData,
+            "Sorry, I failed to save your data back to Babajob."
+            , uri, body);
+          callback(error, richDocObj);
+        } else {
+          let seekerObj;
+          try {
+            seekerObj = body;
+            console.log("Saved new rich doc` on " + jobSeekerId);
+
+            //TODO: return the putData to callers so they can update their data models...
+
+            callback(null, richDocObj);
+          } catch (e) {
+            handleError("saveRichDocToBJ", e, putData,
+              "exception while parsing JSON:"
+              , uri, body);
+             callback(e, richDocObj);
+          }
+        }
+      }
+      );
+    }
+  }
+}
+   
+
+function getRichDocJSONForBJSave(richDocObj, session) {
+  var putData = null;
+  //check for resume    
+  if (richDocObj.document.hint == "Resume") {
+    //save to profile not documents?
+  } else {
+    //Get the IDProofs JSON
+    var putData = JSON.parse(JSON.stringify(richDocSampleData));
+
+    //find the matching document type...
+    var doc;
+    var matches = putData.options.filter(
+      function (documentType) {
+        return documentType.name == richDocObj.document.hint;
+      })
+    if (matches && matches.length > 0) {
+      doc = JSON.parse(JSON.stringify(matches[0]));
+    }
+    //delete the other options...
+    if (putData.options) {
+      delete putData.options;
+    }
+
+    //{ "id": 1, "answerOptionId": 5815, "uploaded": "yes", 
+    //"name": "VoterID", "isVerified": false, "has": false, 
+    //"confidence": 0, "labelSeeker": "Has VoterID",
+    //    "labelPost": "Need VoterID"
+
+    //remove the answer option, given they are not answering a question        
+    if (doc.answerOptionId) {
+      delete doc.answerOptionId;
+    }
+    doc.has = true;
+    doc.confidence = .9;
+    doc.isVerified = richDocObj.nameMatch != null;
+    doc.verificationNotes = richDocObj.document.summary;
+
+    //TODO: save url back to google store.
+    doc.uploaded = richDocObj.contentUrl;
+    doc.publicUploaded = richDocObj.contentUrl;
+
+    if (richDocObj.document.documentId) {
+      doc.documentId = richDocObj.document.documentId;
+    }
+    doc.verificationLevel = getVerificationLevel(richDocObj);
+
+    doc.verifier = "Babajob_OCR";
+    doc.verificationData = richDocObj.googleData;
+    doc.verificationDate = new Date();
+    
+    putData.value = doc;
+  }
+  console.log("getRichDocJSONForBJSave putData" + util.inspect(putData));
+  
+  return putData;
+}
+
+/*
+0 :NotVerified
+1: Name
+2: Name_DocTitle
+3. Name_DocTitle_ID
+4: Name_DocTitle_ID_Human
+5: API_Number
+6: API_Number_Name
+*/
+
+var VerificationLevelEnum = {
+  NotVerified: 0,
+  Name: 1,
+  Name_DocTitle: 2,
+  Name_DocTitle_ID: 3,
+  Name_DocTitle_ID_Human: 4,
+  API_Number: 5,
+  API_Number_Name: 6,
+};
+
+
+function getVerificationLevel(richDocObj) {
+  var verificationLevel = VerificationLevelEnum.NotVerified;
+  if (richDocObj.nameMatch != null) {
+    verificationLevel = VerificationLevelEnum.Name;
+    if (richDocObj.document.type) {
+      verificationLevel = VerificationLevelEnum.Name_DocTitle;
+      if (richDocObj.document.documentId) {
+        verificationLevel = VerificationLevelEnum.Name_DocTitle_ID;
+      }
+    }
+  } 
+  return verificationLevel;
+}
+
+var resumeSampleData = {
+    "attributeId": 6, "attributeName": "Resume", "classification": "Profile",
+    "dataType": "Document", "attributeType": "SingleValue", "options": []
+};
+
+var richDocSampleData = 
+        {
+            "attributeId": 122, "attributeName": "IDProofs",
+            "classification": "Document", "dataType": "Document", "attributeType": "MultiValue",
+            
+            "options": [
+                { "id": 1, "answerOptionId": 5815, "uploaded": "yes", "name": "VoterID", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has VoterID", "labelPost": "Need VoterID" },
+                { "id": 2, "answerOptionId": 5816, "uploaded": "yes", "name": "RationCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has RationCard", "labelPost": "Need RationCard" },
+                { "id": 3, "answerOptionId": 5817, "uploaded": "yes", "name": "DrivingLicense", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has DrivingLicense", "labelPost": "Need DrivingLicense" },
+                { "id": 4, "answerOptionId": 5818, "uploaded": "yes", "name": "AadharCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has AadharCard", "labelPost": "Need AadharCard" },
+                //misspelled...
+            
+                { "id": 5, "answerOptionId": 5819, "uploaded": "yes", "name": "Passport", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has Passport", "labelPost": "Need Passport" },
+            
+                //need new IDs    
+                { "id": 6, "answerOptionId": 581999, "uploaded": "yes", "name": "PANCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has PANCard", "labelPost": "Need PANCard" },
+                { "id": 7, "answerOptionId": 581999, "uploaded": "yes", "name": "PaySlip", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has PaySlip", "labelPost": "Need PaySlip" },
+                { "id": 8, "answerOptionId": 581999, "uploaded": "yes", "name": "CompanyCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has CompanyCard", "labelPost": "Need CompanyCard" }
+            ]
+    }
+        
+
+
+
+////////////////////////////////////////////////////////////////////////////
+//// FACE RECO /////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 
 
 //Find the face...
@@ -1272,6 +1519,27 @@ function cropFace(inputFile,headBounds,callback) {
         console.log(this.outname + " created  ::  " + arguments[3])
       }
     ) 
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+/////// ERROR HANDLING /////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
+
+
+/* 
+                  handleError("saveRichDocToBJ", session, error, putData,
+                        "Sorry, I failed to save your data back to Babajob."
+                        , uri, body);
+                        */
+function handleError(functionName,
+  errorDetails, parameters,
+  userMsg, uri, responseBody) {
+  console.log("ERROR:" + functionName);
+  console.log("ERROR Details:" + errorDetails);
+  console.log("ERROR parameters:" + parameters);
+  console.log("ERROR userMsg:" + userMsg);
+  console.log("ERROR uri:" + uri);
+  console.log("ERROR responseBody:" + responseBody); 
 }
 
 

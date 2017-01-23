@@ -104,12 +104,11 @@ router.post('/richdocs', function (req, res, next) {
   ) {
     res.send("Params missing: firstName, lastName or userid, contentType, contentUrl");
   } else {
-
+    
     user.firstName = req.body.firstName;
     user.lastName = req.body.lastName;
-    //user.name = req.body.name;
     user.userid = req.body.userid;
-
+    
     //var fileURL = "http://www.fingerprintsscanner.com/wp-content/uploads/2013/10/Biometric-Driving-Licence5.jpg"
     var richDoc = {};
     richDoc.contentUrl = req.body.contentUrl;
@@ -124,6 +123,11 @@ router.post('/richdocs', function (req, res, next) {
     }
 
 
+    //Optional auth parameters to save to babajob 
+    user.jobSeekerId = req.body.jobSeekerId; // mongo ID
+    user.accessToken = req.body.accessToken; //Auth token...
+    //consumerKey ?
+    
 
     var options = {};
     options.findFace = false;
