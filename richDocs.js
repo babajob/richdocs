@@ -391,6 +391,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     media: media, //document or voiceClip or CV or selfie
     facePhotoURL: "",
     nameMatch: null,
+    attributeData : null,
     document: {
       summary: "",
       hint: richDoc.documentHint || null,
@@ -1315,6 +1316,7 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
           handleError("saveRichDocToBJ", error, putData,
             "Sorry, I failed to save your data back to Babajob."
             , uri, body);
+          richDocObj.attributeData = putData;
           callback(error, richDocObj);
         } else {
           let seekerObj;
@@ -1362,6 +1364,7 @@ function getRichDocJSONForBJSave(richDocObj, session) {
       delete putData.options;
     }
 
+      
     //{ "id": 1, "answerOptionId": 5815, "uploaded": "yes", 
     //"name": "VoterID", "isVerified": false, "has": false, 
     //"confidence": 0, "labelSeeker": "Has VoterID",
@@ -1374,20 +1377,24 @@ function getRichDocJSONForBJSave(richDocObj, session) {
     doc.has = true;
     doc.confidence = .9;
     doc.isVerified = richDocObj.nameMatch != null;
+    doc.uploaded = richDocObj.contentUrl;    
+    
+
+    //extended props
+    doc.properties = {};
     doc.verificationNotes = richDocObj.document.summary;
 
     //TODO: save url back to google store.
-    doc.uploaded = richDocObj.contentUrl;
-    doc.publicUploaded = richDocObj.contentUrl;
+    doc.properties.publicUploaded = richDocObj.contentUrl;
 
     if (richDocObj.document.documentId) {
-      doc.documentId = richDocObj.document.documentId;
+      doc.properties.documentId = richDocObj.document.documentId;
     }
-    doc.verificationLevel = getVerificationLevel(richDocObj);
+    doc.properties.verificationLevel = getVerificationLevel(richDocObj);
 
-    doc.verifier = "Babajob_OCR";
-    doc.verificationData = richDocObj.googleData;
-    doc.verificationDate = new Date();
+    doc.properties.verifier = "Babajob_OCR";
+    doc.properties.verificationData = richDocObj.googleData;
+    doc.properties.verificationDate = new Date();
     
     putData.value = doc;
   }
