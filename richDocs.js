@@ -1283,6 +1283,13 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
   var putData = [];
   putData.push(getRichDocJSONForBJSave(richDocObj));
 
+
+  var apiSuffix = "/documents";  //switch to profile if resume...
+  if (richDocObj.document.hint == "Resume") {
+    apiSuffix = "";
+  }
+
+
   console.log("Saving RichDocs...");
   console.log(util.inspect(putData));
 
@@ -1299,7 +1306,7 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
       
       //TODO - change to update profile in case of CV save...
 
-      var uri = bjAPIDomain + "/v2/jobseekers/" + jobSeekerId + "/documents";
+      var uri = bjAPIDomain + "/v2/jobseekers/" + jobSeekerId + apiSuffix;
       request({
         uri: uri,
         method: "POST",
@@ -1345,7 +1352,24 @@ function getRichDocJSONForBJSave(richDocObj, session) {
   var putData = null;
   //check for resume    
   if (richDocObj.document.hint == "Resume") {
-    //save to profile not documents?
+    putData = {
+      value:
+      {
+        id: 0,
+        name: 'Resume',
+        uploaded: richDocObj.contentUrl,
+        isVerified: richDocObj.nameMatch != null,
+        confidence: 0,
+        has: true
+      },
+      attributeId: 6,
+      attributeName: 'Resume',
+      attributeType: 'SingleValue',
+      classification: 'Profile',
+      dataType: 'Document'
+    }
+    
+
   } else {
     //Get the IDProofs JSON
     var putData = JSON.parse(JSON.stringify(richDocSampleData));
