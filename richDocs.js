@@ -1331,8 +1331,8 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
             seekerObj = body;
             console.log("Saved new rich doc` on " + jobSeekerId);
 
-            //TODO: return the putData to callers so they can update their data models...
-
+            // return the putData to callers so they can update their data models...
+            richDocObj.attributeData = putData;
             callback(null, richDocObj);
           } catch (e) {
             handleError("saveRichDocToBJ", e, putData,
