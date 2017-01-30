@@ -386,6 +386,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
   var result = {
     success: false,
     user: user,
+    originalUrl: richDoc.contentUrl,
     contentUrl: richDoc.contentUrl,
     contentType: richDoc.contentType,
     media: media, //document or voiceClip or CV or selfie
@@ -689,7 +690,26 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
   else {
     //document detection...
     async.waterfall([
+
+      //Save the file to Babajob's Amazon Store
       function (callback) {
+        console.log("Saving to Babajob Amazon..." + richDoc.contentUrl);
+        var fileName = (user.userid ?  user.userid : "unknownId") + "-" + (richDoc.documentHint ? richDoc.documentHint : "unknown") + '-' + "image.png";
+        copyFileToBJ(richDoc.contentUrl, richDoc.contentType, fileName,
+          function (err, newFileUrl) {
+            if (err) {
+              return callback(err, result);
+            } else {
+              //save the new URL
+              result.contentUrl = newFileUrl;
+              console.log("Saved at :" + result.contentUrl);
+              callback(null, result);
+            }
+          }
+        );
+      },
+
+      function (result, callback) {
         detectText(richDoc.contentUrl, function (err, texts) {
           console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
           if (err) {
@@ -1266,6 +1286,79 @@ function findIndianState(input, searchWithNoSpaces) {
 }
 
 
+////////////////////////////////////////////////////////////////////////////
+////// SAVE FILE TO AMAZON      ////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+function copyFileToBJ(originalUrl, contentType, fileName, callback) {
+  var savedUrl = "";
+  var errorMsg = "There was an erroring while copying this file to Babajob's Amazon account";
+
+  //var uri = bjAPIDomain + "/api/images/bj-richdocs/upload";
+  //hardcoding until we deploy... 30 Jan 2016...
+
+  var uri = "http://qa02api.babajob.com" + "/api/images/bj-richdocs/upload";
+  var formData = {
+    //my_file: ,
+    // Pass optional meta-data with an 'options' object with style: {value: DATA, options: OPTIONS}
+    // Use case: for some types of streams, you'll need to provide "file"-related information manually.
+    // See the `form-data` README for more information about options: https://github.com/form-data/form-data
+    //attachments: [  request(picUrl) ],
+        
+    custom_file: {
+      value: request(originalUrl),
+      options: {
+        filename: fileName, //hmmmmm
+        contentType: contentType
+      }
+      //"file\"; filename=\"image.png\"")
+    }
+  };
+
+  request({
+    uri: uri,
+    method: "POST",
+    timeout: 45000,
+    contentType: "multipart/form-data",
+    
+    /*
+    headers: {
+        'Authorization': accessToken,
+        'consumer-key': consumerKey,
+        'ProfileId': jobSeekerId
+    },
+    */
+    formData: formData
+  }, function (error, response, body) {
+    if (error) {
+      callback("copyFileToBJ:error" + error, savedUrl);   
+    } else {
+      try {
+        var obj = JSON.parse(JSON.parse(body));
+        console.log(util.inspect(obj));
+
+        if (obj.urls) {
+          var url = obj.urls[0];
+
+          console.log("Saved new file to URL " + url);
+          savedUrl = url;
+          /*
+          '"{\\"status\\":true,\\"message\\":\\"Upload Successful\\",\\"urls\\":[\\"http://bj-richdocs.s3-ap-southeast-1.amazonaws.com/image.png\\"]}"',
+          */
+
+          callback(null, savedUrl);
+        } else {
+          console.log("ERROR in copyFileToBJ " + obj);
+          return callback(null, savedUrl);
+        }
+      } 
+      catch (e) {
+        return callback(e, savedUrl);
+      }
+    }
+  }
+  );
+}
 
 ////////////////////////////////////////////////////////////////////////////
 ////// SAVE RICH DOC TO BABAJOB ////////////////////////////////////////////
