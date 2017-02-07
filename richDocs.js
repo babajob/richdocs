@@ -698,6 +698,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         copyFileToBJ(richDoc.contentUrl, richDoc.contentType, fileName,
           function (err, newFileUrl) {
             if (err) {
+              console.log("err at copyFileToBJ :", err);
               return callback(err, result);
             } else {
               //save the new URL
@@ -746,7 +747,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
             if (result.success) {
               //if document type == hint...
               //take name match into account
-              result.document.summary = "Verified: " + result.document.summary;
+              //result.document.summary = "Verified: " + result.document.summary;
             } else {
               result.document.summary = result.document.hint + (result.document.summary ? ". Verified: " + result.document.summary : "");
             }
@@ -966,6 +967,7 @@ function detectText (inputFile, callback) {
     console.log('detectText:inputFile:', inputFile);
     
     if (err) {
+      console.log('detectText:error:', err);
       return callback(err);
     }
     if (!texts[0]) {
@@ -1242,7 +1244,7 @@ function findDOB(texts) {
 
 function getAge(date) {
   var now = new Date();
-  return parseInt((now-date)/(1000*3600*24*365));
+  return parseInt((now-date)/(1000*3600*24*365.25));
 }
 
 //DD/MM/YYYY
@@ -1294,10 +1296,10 @@ function copyFileToBJ(originalUrl, contentType, fileName, callback) {
   var savedUrl = "";
   var errorMsg = "There was an erroring while copying this file to Babajob's Amazon account";
 
-  //var uri = bjAPIDomain + "/api/images/bj-richdocs/upload";
+  //var uri = "http://preprodapi.babajob.com" + "/api/images/bj-richdocs/upload";
   //hardcoding until we deploy... 30 Jan 2016...
 
-  var uri = "http://qa02api.babajob.com" + "/api/images/bj-richdocs/upload";
+  var uri = bjAPIDomain + "/api/images/bj-richdocs/upload";
   var formData = {
     //my_file: ,
     // Pass optional meta-data with an 'options' object with style: {value: DATA, options: OPTIONS}
@@ -1334,6 +1336,8 @@ function copyFileToBJ(originalUrl, contentType, fileName, callback) {
       callback("copyFileToBJ:error" + error, savedUrl);   
     } else {
       try {
+        console.log("Parsing response from Babajob Save:");
+        console.log(util.inspect(body));
         var obj = JSON.parse(JSON.parse(body));
         console.log(util.inspect(obj));
 
@@ -1368,8 +1372,8 @@ var consumerKey = "DZdXZhkUx2qjom5YwJYc0PiBgIgcKI";
 
 var debugLocallyButOnProductionDB = false;
 var onProduction = debugLocallyButOnProductionDB || config.onProduction;
-var bjAPIDomain =onProduction ? "http://api.babajob.com" : "http://qa02api.babajob.com";
-//var bjWebDomain =onProduction ? "http://www.babajob.com" : "http://qa02.babajob.com";
+var bjAPIDomain =onProduction ? "http://api.babajob.com" : "http://preprodapi.babajob.com";
+//var bjWebDomain =onProduction ? "http://www.babajob.com" : "http://preprod.babajob.com";
 
 function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
  
@@ -1377,14 +1381,15 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
   putData.push(getRichDocJSONForBJSave(richDocObj));
 
 
-  var apiSuffix = "/documents";  //switch to profile if resume...
+  var apiSuffix = "/attributes";  //switch to profile if resume...
+  //apiSuffix = "";
   if (richDocObj.document.hint == "Resume") {
-    apiSuffix = "";
+    ///apiSuffix = "";
   }
 
 
   console.log("Saving RichDocs...");
-  console.log(util.inspect(putData));
+  console.log(util.inspect(putData,false,20));
 
   if (putData.length == 0) {
     console.log("saveRichDocToBJ: No Data to save...");
@@ -1422,7 +1427,8 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
           let seekerObj;
           try {
             seekerObj = body;
-            console.log("Saved new rich doc` on " + jobSeekerId);
+            console.log("Saved new rich doc  on " + jobSeekerId + " return:");
+            console.log(util.inspect(body, false, 20));
 
             // return the putData to callers so they can update their data models...
             richDocObj.attributeData = putData;
@@ -1498,26 +1504,48 @@ function getRichDocJSONForBJSave(richDocObj, session) {
     
 
     //extended props
-    doc.properties = {};
-    doc.verificationNotes = richDocObj.document.summary;
+    
+    var properties = [];
+    properties.push(keyValueMaker("verificationNotes", richDocObj.document.summary));
+    properties.push(keyValueMaker("publicUploaded", richDocObj.contentUrl));
+    if (richDocObj.document.documentId) {
+      properties.push(keyValueMaker("documentId", richDocObj.document.documentId));
+    } 
+    properties.push(keyValueMaker("verificationLevel", getVerificationLevel(richDocObj).toString()));
+    
+    properties.push(keyValueMaker("verifier", "Babajob_OCR"));
+    properties.push(keyValueMaker("verificationDate", new Date() + ""));
+
+    /*
+    properties.verificationNotes = richDocObj.document.summary;
 
     //TODO: save url back to google store.
-    doc.properties.publicUploaded = richDocObj.contentUrl;
+    properties.publicUploaded = richDocObj.contentUrl;
 
     if (richDocObj.document.documentId) {
-      doc.properties.documentId = richDocObj.document.documentId;
+      properties.documentId = richDocObj.document.documentId;
     }
-    doc.properties.verificationLevel = getVerificationLevel(richDocObj);
+    properties.verificationLevel = getVerificationLevel(richDocObj).toString();
 
-    doc.properties.verifier = "Babajob_OCR";
-    doc.properties.verificationData = richDocObj.googleData;
-    doc.properties.verificationDate = new Date();
+    properties.verifier = "Babajob_OCR";
+    //properties.verificationData = richDocObj.googleData;
+    properties.verificationDate = new Date() + "";
     
-    putData.value = doc;
+    
+    */
+    doc.properties = properties;
+    putData.value = [doc];
   }
-  console.log("getRichDocJSONForBJSave putData" + util.inspect(putData));
+  console.log("getRichDocJSONForBJSave putData" + util.inspect(putData,false,20));
   
   return putData;
+}
+
+function keyValueMaker(key, value) {
+  var element = {};
+  element.key = key;
+  element.value = value;
+  return element;
 }
 
 /*
