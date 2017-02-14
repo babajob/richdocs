@@ -89,6 +89,14 @@ firebase.initializeApp({
 
 const util = require('util');
 
+//save to MSFT Apis
+const //builder = require('botbuilder'),
+    captionService = require('./caption-service'),
+    needle = require('needle'),
+    restify = require('restify'),
+    url = require('url'),
+    validUrl = require('valid-url');
+
 //storage
 //var gcloud = require('google-cloud')();  //may need to add ({...}) params...
 //var storage = gcloud.storage({ projectId: "babarichdocs" });
@@ -388,6 +396,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     user: user,
     originalUrl: richDoc.contentUrl,
     contentUrl: richDoc.contentUrl,
+    publicUploaded: richDoc.contentUrl,
     contentType: richDoc.contentType,
     media: media, //document or voiceClip or CV or selfie
     facePhotoURL: "",
@@ -694,7 +703,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       //Save the file to Babajob's Amazon Store
       function (callback) {
         console.log("Saving to Babajob Amazon..." + richDoc.contentUrl);
-        var fileName = (user.userid ?  user.userid : "unknownId") + "-" + (richDoc.documentHint ? richDoc.documentHint : "unknown") + '-' + "image.png";
+        var fileName = getUniquePhotoFileName(user, richDoc);
         copyFileToBJ(richDoc.contentUrl, richDoc.contentType, fileName,
           function (err, newFileUrl) {
             if (err) {
@@ -829,14 +838,66 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         });
       },
 
-      //SAVE BACK TO BABAJOB
+
+      
+  /*  MSFT OCR...
+      .getBodyFromUrl(imageUrl)
+      .then(body =>
+        {
+          //handleSuccessResponse(caption);
+        console.log("MSFT thinks...");
+        var textsummary = captionService.getTextSummaryForMsftOcr(body);
+        console.log(textsummary);
+        console.log(util.inspect(body, false, 10));
+          callback(null, result)
+        }
+      )
+      */
+
+      //SAVE THUMBNAIL BACK TO BABAJOB
       function (result, callback) {
         //ensure we have auth and key...
         if (!(user.jobSeekerId && user.accessToken)) {
           callback(null, result);
         }
         else {
-          console.log("Saving to Babajob...");
+          console.log("Saving Thumbnail to Babajob...");
+          var imageUrl = result.contentUrl;//"";//;
+
+          /*
+          captionService.getThumbnail(imageUrl)
+            .then(stream => copyFileToBJ(stream, "msftstream", "foo", function (err, url) {
+              if (err) { console.log("error", err); } else { console.log("got URL:", url) };
+            }))
+            .catch(error => { handleErrorResponse(error); callback(null, result) });  
+            */
+          
+          var fileName = getUniquePhotoFileName(user, richDoc, "publicUploaded");
+
+          captionService.getThumbnail(imageUrl)
+            .then(stream =>
+              saveThumbnailStream(stream, fileName,
+                function (err, url) {
+                  if (err) {
+                    console.log("error", err);
+                    return callback(err, result);
+                  } else {
+                    result.publicUploaded = url;
+                    callback(null, result);
+                  };
+                }))
+            .catch(error => { handleErrorResponse(error); callback(null, result) });
+        }
+      },
+      
+            //SAVE BACK TO BABAJOB
+      function (result, callback) {
+        //ensure we have auth and key...
+        if (!(user.jobSeekerId && user.accessToken)) {
+          callback(null, result);
+        }
+        else {
+          console.log("Saving RichDoc Properties to Babajob...");
           saveRichDocToBJ(result, user.jobSeekerId, user.accessToken,
             function (err, result) {
               if (err) {
@@ -846,7 +907,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
               }
             });
         }
-      }      
+      }
 
     ],
       function (err, result) {
@@ -867,7 +928,12 @@ function finallyRunDocs(options, result, callback) {
   //finally print the result
   //console.log("parseRichDoc result:" + JSON.stringify(result, null, 2));    
   callback(null, result);
-} 
+}
+
+
+
+
+/////////////////////////////////////////////  
 
 function saveRecoForDialect(result, dialect, desiredPhrase, detectedWords) {
   var desiredArray = desiredPhrase.split(' ');
@@ -1292,12 +1358,35 @@ function findIndianState(input, searchWithNoSpaces) {
 ////// SAVE FILE TO AMAZON      ////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-function copyFileToBJ(originalUrl, contentType, fileName, callback) {
+function copyFileToBJ(originalUrlOrStream, contentType, fileName, callback) {
   var savedUrl = "";
   var errorMsg = "There was an erroring while copying this file to Babajob's Amazon account";
 
   //var uri = "http://preprodapi.babajob.com" + "/api/images/bj-richdocs/upload";
   //hardcoding until we deploy... 30 Jan 2016...
+
+  var fileData;
+
+  if (contentType == "msftstream") {
+    fileData = {
+      value: new Buffer(originalUrlOrStream),
+      options: {
+        filename: fileName, 
+        contentType: 'image/jpg'
+      }
+    }
+
+  } else {
+    fileData = {
+      value: request(originalUrlOrStream),
+      options: {
+        filename: fileName, //hmmmmm
+        contentType: contentType
+      }
+    }
+  }
+
+
 
   var uri = bjAPIDomain + "/api/images/bj-richdocs/upload";
   var formData = {
@@ -1307,14 +1396,9 @@ function copyFileToBJ(originalUrl, contentType, fileName, callback) {
     // See the `form-data` README for more information about options: https://github.com/form-data/form-data
     //attachments: [  request(picUrl) ],
         
-    custom_file: {
-      value: request(originalUrl),
-      options: {
-        filename: fileName, //hmmmmm
-        contentType: contentType
-      }
+    custom_file: fileData
       //"file\"; filename=\"image.png\"")
-    }
+    
   };
 
   request({
@@ -1450,6 +1534,15 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
 function getRichDocJSONForBJSave(richDocObj, session) {
   var putData = null;
   //check for resume    
+
+  var isCarDocument = (
+    richDocObj.document.hint == "Car_Registration_Certificate" || 
+    richDocObj.document.hint == "Car_Insurance_Proof" || 
+    richDocObj.document.hint == "Road_Tax_Receipt" || 
+    richDocObj.document.hint == "Car_Owner_No_Objection_Certificate" || 
+    richDocObj.document.hint == "Car_BSG_Consent_Form" 
+    )  ;  
+
   if (richDocObj.document.hint == "Resume") {
     putData = {
       value:
@@ -1467,11 +1560,13 @@ function getRichDocJSONForBJSave(richDocObj, session) {
       classification: 'Profile',
       dataType: 'Document'
     }
-    
 
   } else {
     //Get the IDProofs JSON
-    var putData = JSON.parse(JSON.stringify(richDocSampleData));
+
+    isCarDocument = false; // TODO: replace once the schema is final...
+
+    var putData = JSON.parse(JSON.stringify((isCarDocument ? carDocumentsSampleData : richDocSampleData)));
 
     //find the matching document type...
     var doc;
@@ -1507,7 +1602,7 @@ function getRichDocJSONForBJSave(richDocObj, session) {
     
     var properties = [];
     properties.push(keyValueMaker("verificationNotes", richDocObj.document.summary));
-    properties.push(keyValueMaker("publicUploaded", richDocObj.contentUrl));
+    properties.push(keyValueMaker("publicUploaded", richDocObj.publicUploaded));
     if (richDocObj.document.documentId) {
       properties.push(keyValueMaker("documentId", richDocObj.document.documentId));
     } 
@@ -1608,8 +1703,63 @@ var richDocSampleData =
                 { "id": 8, "answerOptionId": 581999, "uploaded": "yes", "name": "CompanyCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has CompanyCard", "labelPost": "Need CompanyCard" }
             ]
     }
-        
 
+var carDocumentsSampleData = 
+        {
+            "attributeId": 333333, "attributeName": "Car_Documents",
+            "classification": "Document", "dataType": "Document",
+            "attributeType": "MultiValue",
+            
+            "options": [
+              
+            ]
+    }
+
+
+////////////////////////////////////////////////////////////////////////////
+//// MSFT THUMBNAIL RECO /////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+
+function saveThumbnailStream(stream, fileName, callback)
+{
+  copyFileToBJ(stream, "msftstream", fileName,
+    function (err, url) {
+      if (err)
+      { return callback(err, "") }
+      else {
+        console.log("got saveThumbnailStream URL:", url);
+        callback(null, url);
+      };
+    }); 
+}
+
+function getUniquePhotoFileName(user, richDoc, suffix) {
+  var fileName =
+    (user.userid ? user.userid : "unknownId") + 
+    "-" + (richDoc.documentHint ? richDoc.documentHint : "unknown")
+    + (suffix ? "-" + suffix : "")
+    + '-' + "image.png";
+  return fileName;
+}
+
+//=========================================================
+// Response Handling for caption service
+//=========================================================
+const handleSuccessResponse = (caption) => {
+    if (caption) {
+        console.log('I think it\'s ' + caption);
+    }
+    else {
+        console.log('Couldn\'t find a caption for this one');
+    }
+
+};
+
+const handleErrorResponse = (error) => {
+    console.log('Oops! Something went wrong. Try again later.');
+    console.error(error);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////
