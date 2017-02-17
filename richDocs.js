@@ -1,21 +1,6 @@
 // Copyright 2016, Google, Inc.
 /*
 
-
-Todos:
-Handle delete
-Fix on web
-Parse UserId, firstAndLast
-
-
-
-get in a repro
-Post to google hosting
-
-Handle Address parsing
-Push upload 
-
-
 //RichDocs
 Expose as one function inputFile, {user:userid, firstName, lastName }, options: findFace, savePictures, verbose (includes Google Data)
 return 
@@ -34,16 +19,30 @@ googleData:
   faceDetection
 err:
 
-2. Move to expose as webservice - Done
-3. Save photo and face to FB
-4. Expose on Google Cloud
-5. Do address lookup on text... - likely as a separate service...
+Todos:
 
-Eventual Usage
---web, apps NOT messenger...
-0. Get an auth credential from a babajob userID
-1. Auth to Fire
-2. Call Client service to upload a file?
+
+////////////////////////////////////////////////////////////////////
+What can happen in parallel?
+1. 
+* Parse FB Pic from Google
+* Ocr via MSFT
+* Thumbnail via MSFT
+* Save FB Pic to BJ
+
+2.
+Save to FireBase
+When Parse is back -> Run Detect + panVerify
+When Thumbnail is back -> save thumbnail to BJ
+
+3.
+When all return - Return
+
+
+Notes on different OCR
+INCOME TAKDEPARTMENT SEAN BLAGSVEDr DON BLAGSVDr 17/02/1976 Permanent Account Number AJGPB7S06B GOVT 1'1.11.
+
+INCOMETANDEPARTMENT SEAN BLAGSVEDT DON BLAGSVDT 17/02/1976 Permanent Account Number AJGPB 7906B Signature GOVT. OF INETA 
 
 
 
@@ -165,8 +164,6 @@ richDocs.prototype.deleteByUserIdAndId = function (userid, id, callback) {
   }
 
   // Attach an asynchronous callback to delete the data
-  
-
   var localRichDocs = new richDocs();
   async.waterfall([
     function (callback) {
@@ -362,11 +359,8 @@ richDocs.prototype.deleteById = function (id, callback) {
 
 /* 
 Expose as one function inputFile, firebaseKey {can be null}, {user:userid, firstName, lastName }, options: findFace, savePictures, verbose (includes Google Data)
-
-
 */
 
-//function parseRichDoc(richDocL, fireBaseKey, user, options, callback) {
 richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options, callback) {
 
   //richDoc.contentUrl = "https://storage.googleapis.com/babarichdocs/archpass.jpg";  
@@ -381,7 +375,8 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     savePictures: null,
     findFace: null,
     findEntities: null,
-    offline: null
+    offline: null,
+    saveToFirebase : null
   };
 
   user = user || {};
@@ -409,6 +404,8 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       hasFace: null,
       humanVerified: null,
       documentId: null,
+      verificationLevel: VerificationLevelEnum.NotVerified,
+      verifier: "Babajob_OCR",
       user: { firstName: '', lastName: '', location: { stateName: null } }
     },
     voiceClip: {
@@ -449,8 +446,6 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
   if (options.offline) return finallyRunDocs(options, result, callback);
   
   console.log("starting parseRichDoc firebaseBay" + firebaseKey + " contentUrl:" + richDoc.contentUrl);
-
-  
 
   if (media == "voiceClip") {
     var callBackCounter = 0;
@@ -719,6 +714,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         );
       },
 
+      //Parse on Google      
       function (result, callback) {
         detectText(richDoc.contentUrl, function (err, texts) {
           console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
@@ -763,10 +759,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
             } else {
               result.document.summary = result.document.hint + (result.document.summary ? ". Verified: " + result.document.summary : "");
             }
-          }  
-
-  //Non-blocking async save back to Babajob
-  
+          }    
 
           //callback before close
           callback(null, result);
@@ -774,6 +767,8 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
          
 
       },
+
+      
       //OPTIONAL FEATURES
       function (result, callback) {
         //the face in the photo
@@ -792,6 +787,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           });
         }
       },
+
       function (result, callback) {
         //find entities in the photo (usually returns nothing useful)
         if (!options.findEntities) {
@@ -811,35 +807,38 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       //Save result to firebase
       function (result, callback) {
         //console.log("Saving to Firebase...");
+        if (!options.saveToFirebase) {
+          callback(null, result);
+        } else {
+          var ref = firebase.database().ref();
+
+          // Get a key for a new richDoc if firebaseKey is not null
+          var newDocKey = firebaseKey || ref.child(richdocsDB).push().key;
+
+          // Write the new post's data simultaneously in the richDoc lists and create fast indexes by userid, Aadhaar. 
+          var updates = {};
+          updates['/' + richdocsDB + '/all/' + newDocKey] = result;
+          if (result.user) {
+            if (result.user.userid) {
+              updates['/' + richdocsDB + '/by-userid/' + result.user.userid + '/' + newDocKey] = result;
+            }
+            if (result.document.user.aadhaarNumber) {
+              updates['/' + richdocsDB + '/by-aadhaar/' + result.document.user.aadhaarNumber + '/' + newDocKey] = result;
+            }
+          }
+
       
-        var ref = firebase.database().ref();
-
-        // Get a key for a new richDoc if firebaseKey is not null
-        var newDocKey = firebaseKey || ref.child(richdocsDB).push().key;
-
-        // Write the new post's data simultaneously in the richDoc lists and create fast indexes by userid, Aadhaar. 
-        var updates = {};
-        updates['/' + richdocsDB + '/all/' + newDocKey] = result;
-        if (result.user) {
-          if (result.user.userid) {
-            updates['/' + richdocsDB + '/by-userid/' + result.user.userid + '/' + newDocKey] = result;
-          }
-          if (result.document.user.aadhaarNumber) {
-            updates['/' + richdocsDB + '/by-aadhaar/' + result.document.user.aadhaarNumber + '/' + newDocKey] = result;
-          }
+          console.log("about to save to firebase richdoc result" + util.inspect(result, { showHidden: false, depth: null }));
+      
+          ref.update(updates, function (err) {
+            if (err) {
+              return callback(err, result);
+            } else {
+              callback(null, result);
+            }
+          });
         }
-
-      
-        console.log("about to save to firebase richdoc result" + util.inspect(result, { showHidden: false, depth: null }));
-      
-        ref.update(updates, function (err) {
-          if (err) {
-            return callback(err, result);
-          } else {
-            callback(null, result);
-          }
-        });
-      },
+      },  
 
 
       
@@ -890,8 +889,38 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
                   };
                 }))
             .catch(error => { handleErrorResponse(error); callback(null, result) });
+        } 
+      },
+
+      //VERIFY PAN / Aadhaar if present
+      function (result, callback) {
+        //set the verification level...
+
+        result.document.verificationLevel = getVerificationLevel(result);
+        //ensure we have auth and key...
+        if (result.document.type == 'PANCard' && result.document.documentId) {
+          verifyPAN(result.document.documentId,
+            result.user.firstName + " " + result.user.lastName,
+            (err, verifyLevel) => 
+            {
+              if (err) {
+                callback(err, result);
+              } else {
+                result.document.verifier = "BetterPlace";
+                result.document.verificationLevel = verifyLevel;
+                /*if (verifyLevel > VerificationLevelEnum.Name_DocTitle_ID_Human) {
+                  result.document.summary += "verified
+                }
+                */
+                callback(null, result);
+              }
+            }
+          )
+        } else {
+          callback(null, result); 
         }
       },
+
       
             //SAVE BACK TO BABAJOB
       function (result, callback) {
@@ -1054,6 +1083,37 @@ function detectText (inputFile, callback) {
 function findText (little, big) {
   if (!little || !big) return null;
   return S(big.toLowerCase()).contains(little.toLowerCase().trim());
+}
+
+var NameMatchEnum = {
+  None: 0,
+  firstOnly: 1, 
+  LastOnly : 2, 
+  FirstAndLast : 3
+}
+
+function matchNameEnum(firstName, lastName, texts) {
+  var combinedName = S(firstName).trim() + S(lastName).trim();
+  var nameLevel = NameMatchEnum.None;
+  if (combinedName.length < 5) {
+    nameLevel = NameMatchEnum.None; //too short
+  } else {
+    if (
+      findText(combinedName, texts) ||
+      findText(S(firstName + ' ' + lastName).trim(), texts)
+      || (findText(firstName, texts) && findText(lastName, texts))
+    ) {
+      nameLevel = NameMatchEnum.FirstAndLast;
+    }
+  
+    else
+      if (findText(firstName, texts)) {
+        nameLevel = NameMatchEnum.firstOnly;
+      } else if (findText(lastName, texts)) {
+        nameLevel = NameMatchEnum.LastOnly;;
+      }
+  }
+  return nameLevel;
 }
 
 //Returns null, firstOnly, LastOnly, FirstAndLast
@@ -1614,9 +1674,9 @@ function getRichDocJSONForBJSave(richDocObj, session) {
     if (richDocObj.document.documentId) {
       properties.push(keyValueMaker("documentId", richDocObj.document.documentId));
     } 
-    properties.push(keyValueMaker("verificationLevel", getVerificationLevel(richDocObj).toString()));
+    properties.push(keyValueMaker("verificationLevel", richDocObj.document.verificationLevel.toString()));
     
-    properties.push(keyValueMaker("verifier", "Babajob_OCR"));
+    properties.push(keyValueMaker("verifier", richDocObj.document.verifier ));
     properties.push(keyValueMaker("verificationDate", new Date() + ""));
 
     /*
@@ -1723,6 +1783,113 @@ var carDocumentsSampleData =
             ]
     }
 
+
+////////////////////////////////////////////////////////////////////////////
+//// BEtter Place APIs /////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+var betterPlaceApiKey = "Jyrf4qP972QRBmmFz1E4vPsnr8cUJXQZVXfryHRkJxnSpBRX6Lw6KjHleYT/WXE/pX6D5vrcS4aNpGszVoU/bg==";
+
+function verifyPAN(panNumber, userName, callback) {
+  var verifyLevel = VerificationLevelEnum.NotVerified;
+
+  //https://testportal.betterplace.co.in/VishwasAPI/api/public/v2/panVerification/AJGPB7906B
+  var uri = "https://testportal.betterplace.co.in/VishwasAPI/api/public/v2/panVerification/" + panNumber;
+  request({
+    uri: uri,
+    method: "GET",
+    timeout: 45000,
+    headers: {
+      'Content-Type': "application/json",
+      'Accept': "application/json",
+      'apiKey': betterPlaceApiKey
+    }
+  },
+    function (error, response, body) {
+      if (error) {
+        callback("verifyPAN:error: " + error + " uri:" + uri, verifyLevel);
+      } else {
+        try {
+          console.log("Parsing response from Better Place with uri:", uri);
+          
+          var obj = JSON.parse(body);
+          console.log(util.inspect(obj));
+          //console.log(util.inspect(obj));
+          //var obj = body;
+          var verifyLevel = VerificationLevelEnum.NotVerified;
+
+          //check for Name Match...
+          /* 
+           "lastName": "BLAGSVEDT",
+    "firstName": "SEAN",
+    */
+          if (obj.data && obj.data.statusCode == "1") {
+            //PAN Verified
+            verifyLevel = VerificationLevelEnum.API_Number;
+            var firstName = obj.data.firstName || "";
+            var lastName = obj.data.lastName || "";
+
+            var nameMatchLevel = matchName(firstName, lastName, userName);
+            if (nameMatchLevel != NameMatchEnum.None) {
+              verifyLevel = VerificationLevelEnum.API_Number_Name;
+            }
+            callback(null, verifyLevel);
+          } else {
+            console.log("ERROR in verifyPAN " + obj);
+            return callback(null, verifyLevel);
+          }
+        }
+        catch (e) {
+          return callback(e, verifyLevel);
+        }
+      }
+    }
+  );
+}
+
+var samplePAN = 
+{
+  "data": {
+    "statusCode": "1",
+    "panNumber": "AJGPB7906B",
+    "panstatus": "E",
+    "lastName": "BLAGSVEDT",
+    "firstName": "SEAN",
+    "middleName": null,
+    "panTitle": "Shri",
+    "lastUpdateDate": "08/05/2008",
+    "message": "Record found in PAN database."
+  },
+  "messages": []
+}
+var workingUID = 
+[
+{
+    "name":"Renuka", 
+    "mobile":"9740530275",
+    "aadhaarNo":"503152422060",
+    "gender":"FEMALE"
+   
+
+    },
+  {
+    "name":"Amarnath Verma", 
+    "mobile":"7760677603",
+    "aadhaarNo":"648603471914",
+    "gender":"MALE"
+}  
+  ]    
+
+var aadhaarSuccess =
+{
+  "data": true,
+  "messages": [
+    {
+      "message": "Successfully Verified",
+      "type": "INFO",
+      "errorCode": null
+    }
+  ]
+}
 
 ////////////////////////////////////////////////////////////////////////////
 //// MSFT THUMBNAIL RECO /////////////////////////////////////////////////////////////
@@ -1851,6 +2018,8 @@ function handleError(functionName,
   console.log("ERROR uri:" + uri);
   console.log("ERROR responseBody:" + responseBody); 
 }
+
+
 
 
 module.exports = richDocs;
