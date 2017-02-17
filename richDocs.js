@@ -740,8 +740,11 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         
           //console.log("nameMatch:" + result.nameMatch);
 
-          result = detectIDDocument(summary, result);
-
+          if (result.document.hint != "Resume") {
+            result = detectIDDocument(summary, result);
+          } else {
+            result.document.type = result.document.hint;
+          }  
           
           //set success to true if we found a known document pattern.
           if (result.document.type) {
@@ -1107,11 +1110,15 @@ function detectIDDocument(texts, result) {
   result.document.summary = "";
   
   //detect a state
-  var state = findIndianState(texts);
-  if (state) {
-    result.document.user.location.stateName = state;
-    result.document.summary += state + " ";
-  }
+  
+    var state = findIndianState(texts);
+    if (state)
+    {
+      
+        result.document.user.location.stateName = state;
+        result.document.summary += state + " ";
+      
+    }  
   
   //PALSLIP 
   //comes at top because it has much of the other data below...
