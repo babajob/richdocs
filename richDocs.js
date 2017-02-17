@@ -1788,12 +1788,15 @@ var carDocumentsSampleData =
 //// BEtter Place APIs /////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 var betterPlaceApiKey = "Jyrf4qP972QRBmmFz1E4vPsnr8cUJXQZVXfryHRkJxnSpBRX6Lw6KjHleYT/WXE/pX6D5vrcS4aNpGszVoU/bg==";
+var ProbetterPlaceApiKey = "KA4JwHO517MqBsMO9MbtbMO2RyYKqbGwoFxhdv0KV5QOK5VZk44Nzg8CFDM2CkJwiZhkRoH/xWbAW4HhhRHiig==";
+
+var betterPlaceDomain = "https://testportal.betterplace.co.in/";
 
 function verifyPAN(panNumber, userName, callback) {
   var verifyLevel = VerificationLevelEnum.NotVerified;
 
   //https://testportal.betterplace.co.in/VishwasAPI/api/public/v2/panVerification/AJGPB7906B
-  var uri = "https://testportal.betterplace.co.in/VishwasAPI/api/public/v2/panVerification/" + panNumber;
+  var uri = betterPlaceDomain + "VishwasAPI/api/public/v2/panVerification/" + panNumber;
   request({
     uri: uri,
     method: "GET",
@@ -1810,7 +1813,7 @@ function verifyPAN(panNumber, userName, callback) {
       } else {
         try {
           console.log("Parsing response from Better Place with uri:", uri);
-          
+          console.log(body);
           var obj = JSON.parse(body);
           console.log(util.inspect(obj));
           //console.log(util.inspect(obj));
@@ -1839,6 +1842,7 @@ function verifyPAN(panNumber, userName, callback) {
           }
         }
         catch (e) {
+          console.log("Exception in betterPlace;", e);
           return callback(e, verifyLevel);
         }
       }
