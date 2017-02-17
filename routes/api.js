@@ -124,8 +124,8 @@ router.post('/richdocs', function (req, res, next) {
 
 
     //Optional auth parameters to save to babajob 
-    user.jobSeekerId = req.body.jobSeekerId; // mongo ID
-    user.accessToken = req.body.accessToken; //Auth token...
+    user.jobSeekerId = req.body.jobSeekerId || ""; // mongo ID
+    user.accessToken = req.body.accessToken || ""; //Auth token...
     //consumerKey ?
     
 

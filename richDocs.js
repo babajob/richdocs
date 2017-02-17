@@ -1004,10 +1004,11 @@ function finallyRunSpeech(result) {
           result.document.summary = "You speak " + naturalDialect + " English very well. "
     }    
 
-    var simpleScore = bestReco.matchScore + " ";
+    var simpleScore = bestReco.matchScore;
     simpleScore = simpleScore.split('.')[0] + "%";    
     result.document.summary +=
-      "Your " + naturalDialect + " English Score is: " + simpleScore + ". We heard: " + bestReco.recognizedText;
+      "Your " + naturalDialect + " English Score is: " + simpleScore + ".";
+      //". We heard: " + bestReco.recognizedText;
   }
 }
 
