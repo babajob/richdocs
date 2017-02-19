@@ -898,32 +898,49 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
 
         result.document.verificationLevel = getVerificationLevel(result);
         //ensure we have auth and key...
-        if (result.document.type == 'PANCard' && result.document.documentId) {
-          verifyPAN(result.document.documentId,
-            result.user.firstName + " " + result.user.lastName,
-            (err, verifyLevel) => 
-            {
-              if (err) {
-                callback(err, result);
-              } else {
-                result.document.verifier = "BetterPlace";
-                result.document.verificationLevel = verifyLevel;
+        if (result.document.documentId) {
+          if (result.document.type == 'PANCard') {
+            verifyPAN(result.document.documentId,
+              result.user.firstName + " " + result.user.lastName,
+              (err, verifyLevel) => {
+                if (err) {
+                  callback(err, result);
+                } else {
+                  result.document.verifier = "BetterPlace";
+                  result.document.verificationLevel = verifyLevel;
                 
-                //set the name match in case the OCR failed...
-                if (verifyLevel > VerificationLevelEnum.API_Number_Name) {
-                  result.nameMatch = 'firstAndLast';
-                }
+                  //set the name match in case the OCR failed...
+                  if (verifyLevel == VerificationLevelEnum.API_Number_Name) {
+                    result.nameMatch = 'firstAndLast';
+                  }
                 
-                /*if (verifyLevel > VerificationLevelEnum.Name_DocTitle_ID_Human) {
-                  result.document.summary += "verified
+                  callback(null, result);
                 }
-                */
-                callback(null, result);
               }
-            }
-          )
+            )
+          } else if (result.document.type == 'AadhaarCard') {
+            verifyAadhaar(result.document.documentId,
+              result.user.firstName + " " + result.user.lastName,
+              (err, verifyLevel) => {
+                if (err) {
+                  callback(err, result);
+                } else {
+                  result.document.verifier = "BetterPlace";
+                  result.document.verificationLevel = verifyLevel;
+                
+                  //set the name match in case the OCR failed...
+                  if (verifyLevel == VerificationLevelEnum.API_Number_Name) {
+                    result.nameMatch = 'firstAndLast';
+                  }
+                
+                  callback(null, result);
+                }
+              }
+            )
+
+          }
         } else {
-          callback(null, result); 
+          callback(null, result);
         }
       },
 
@@ -1871,7 +1888,61 @@ var samplePAN =
     "message": "Record found in PAN database."
   },
   "messages": []
+  }
+
+function verifyAadhaar(aadhaarNumber, userName, callback) {
+  var verifyLevel = VerificationLevelEnum.NotVerified;
+
+  //https://testportal.betterplace.co.in/VishwasAPI/api/public/v2/aadhaar/authenticate
+  var uri = betterPlaceDomain + "VishwasAPI/api/public/v2/aadhaar/authenticate";
+  
+  var formData = {
+    "name": userName,
+    "mobile": "9886251476", //not used...
+    "aadhaarNo": aadhaarNumber
+  }
+  
+  request({
+    uri: uri,
+    method: "POST",
+    timeout: 45000,
+    headers: {
+      'Content-Type': "application/json",
+      'Accept': "application/json",
+      'apiKey': betterPlaceApiKey
+    },
+    formData: formData
+  },
+    function (error, response, body) {
+      if (error) {
+        callback("verifyAadhaar:error: " + error + " uri:" + uri, verifyLevel);
+      } else {
+        try {
+          console.log("Parsing verifyAadhaar response from Better Place with uri:", uri);
+          console.log(body);
+          var obj = JSON.parse(body);
+          console.log(util.inspect(obj));
+          //console.log(util.inspect(obj));
+
+          //TODO: Cycle through other name matches 
+          //e.g. just first, just last, etc
+
+          var verifyLevel =
+            obj.data ? VerificationLevelEnum.API_Number_Name : VerificationLevelEnum.NotVerified;
+          callback(null, verifyLevel);
+        }
+        
+        catch (e) {
+          console.log("Exception in betterPlace;", e);
+          return callback(e, verifyLevel);
+        }
+      }
+    }
+  );
 }
+
+
+
 var workingUID = 
 [
 {
@@ -1900,7 +1971,19 @@ var aadhaarSuccess =
       "errorCode": null
     }
   ]
-}
+  }
+
+var aadhaarFail = 
+{
+  "data": false,
+  "messages": [
+    {
+      "message": "Basic attributes of demographic data did not match.",
+      "type": "ERROR",
+      "errorCode": "100"
+    }
+  ]
+}  
 
 ////////////////////////////////////////////////////////////////////////////
 //// MSFT THUMBNAIL RECO /////////////////////////////////////////////////////////////
