@@ -734,7 +734,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
 
           result.nameMatch = matchName(user.firstName, user.lastName, summary);
         
-          //console.log("nameMatch:" + result.nameMatch);
+          console.log("matchName: user.firstName:" + user.firstName + " user.lastName:" + user.lastName + " summary:" + summary + " RESULT:", result.nameMatch);
 
           if (result.document.hint != "Resume") {
             result = detectIDDocument(summary, result);
@@ -908,6 +908,12 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
               } else {
                 result.document.verifier = "BetterPlace";
                 result.document.verificationLevel = verifyLevel;
+                
+                //set the name match in case the OCR failed...
+                if (verifyLevel > VerificationLevelEnum.API_Number_Name) {
+                  result.nameMatch = 'firstAndLast';
+                }
+                
                 /*if (verifyLevel > VerificationLevelEnum.Name_DocTitle_ID_Human) {
                   result.document.summary += "verified
                 }
@@ -1830,6 +1836,7 @@ function verifyPAN(panNumber, userName, callback) {
             verifyLevel = VerificationLevelEnum.API_Number;
             var firstName = obj.data.firstName || "";
             var lastName = obj.data.lastName || "";
+
 
             var nameMatchLevel = matchName(firstName, lastName, userName);
             if (nameMatchLevel != NameMatchEnum.None) {
