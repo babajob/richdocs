@@ -1911,7 +1911,7 @@ function verifyAadhaar(aadhaarNumber, userName, callback) {
       'Accept': "application/json",
       'apiKey': betterPlaceApiKey
     },
-    formData: formData
+    body: JSON.stringify(formData)
   },
     function (error, response, body) {
       if (error) {
@@ -1919,6 +1919,8 @@ function verifyAadhaar(aadhaarNumber, userName, callback) {
       } else {
         try {
           console.log("Parsing verifyAadhaar response from Better Place with uri:", uri);
+          console.log(util.inspect(body));
+          console.log("log body");
           console.log(body);
           var obj = JSON.parse(body);
           console.log(util.inspect(obj));
