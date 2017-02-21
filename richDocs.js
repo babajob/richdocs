@@ -1057,7 +1057,7 @@ function finallyRunSpeech(result) {
     }    
 
     var simpleScore = bestReco.matchScore;
-    simpleScore = simpleScore.split('.')[0] + "%";    
+    simpleScore = Math.round(simpleScore)  + "%";// simpleScore.split('.')[0] + "%";    
     result.document.summary +=
       "Your " + naturalDialect + " English Score is: " + simpleScore + ".";
       //". We heard: " + bestReco.recognizedText;
