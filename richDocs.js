@@ -370,6 +370,12 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
     callback("richDocs.parseRichDoc(richDoc.contentType) is not defined");
   }
 
+  console.log("Starting parseRichDoc");
+  console.log("--richDoc");
+  console.log(util.inspect(richDoc));
+  console.log("--user");
+  console.log(util.inspect(user));
+
   options = options || {
     verbose: null,
     savePictures: null,
@@ -949,6 +955,7 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
       function (result, callback) {
         //ensure we have auth and key...
         if (!(user.jobSeekerId && user.accessToken)) {
+          console.log("No Access Token so not saving Properties to Babajob...");
           callback(null, result);
         }
         else {
@@ -1624,6 +1631,8 @@ function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
 
 function getRichDocJSONForBJSave(richDocObj, session) {
   var putData = null;
+  console.log("getRichDocJSONForBJSave");
+  console.log(util.inspect(richDocObj));
   //check for resume    
 
   var isCarDocument = (
@@ -1660,11 +1669,13 @@ function getRichDocJSONForBJSave(richDocObj, session) {
     var putData = JSON.parse(JSON.stringify((isCarDocument ? carDocumentsSampleData : richDocSampleData)));
 
     //find the matching document type...
-    var doc;
+    var doc = {};
     var matches = putData.options.filter(
       function (documentType) {
         return documentType.name == richDocObj.document.hint;
       })
+    
+    console.log("matches:" + util.inspect(matches));
     if (matches && matches.length > 0) {
       doc = JSON.parse(JSON.stringify(matches[0]));
     }
@@ -1784,6 +1795,8 @@ var richDocSampleData =
                 { "id": 2, "answerOptionId": 5816, "uploaded": "yes", "name": "RationCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has RationCard", "labelPost": "Need RationCard" },
                 { "id": 3, "answerOptionId": 5817, "uploaded": "yes", "name": "DrivingLicense", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has DrivingLicense", "labelPost": "Need DrivingLicense" },
                 { "id": 4, "answerOptionId": 5818, "uploaded": "yes", "name": "AadharCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has AadharCard", "labelPost": "Need AadharCard" },
+                { "id": 4, "answerOptionId": 5818, "uploaded": "yes", "name": "AadhaarCard", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has AadharCard", "labelPost": "Need AadharCard" },
+
                 //misspelled...
             
                 { "id": 5, "answerOptionId": 5819, "uploaded": "yes", "name": "Passport", "isVerified": false, "has": false, "confidence": 0, "labelSeeker": "Has Passport", "labelPost": "Need Passport" },
