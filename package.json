@@ -10,7 +10,7 @@
   "dependencies": {
     "@google-cloud/language": "^0.1.2",
     "@google-cloud/speech": "^0.4.0",
-    "@google-cloud/vision": "^0.2.0",
+    "@google-cloud/vision": "^0.8.1",
     "async": "^2.0.1",
     "body-parser": "^1.15.2",
     "cloudconvert": "^1.1.1",

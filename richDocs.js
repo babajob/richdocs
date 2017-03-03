@@ -1092,20 +1092,25 @@ Array.prototype.diff = function(a) {
 // [START construct_request]
 function detectText (inputFile, callback) { 
   // Make a call to the Vision API to detect the texts  
-  vision.detectText(inputFile, { verbose: false }, function (err, texts) {
-    console.log('detectText:inputFile:', inputFile);
+  try {
+    vision.detectText(inputFile, { verbose: false }, function (err, texts) {
+      console.log('detectText:inputFile:', inputFile);
     
-    if (err) {
-      console.log('detectText:error:', err);
-      return callback(err);
-    }
-    if (!texts[0]) {
-      console.log("Rich Docs detectText found no texts");
-      texts = [''];
-    }
-    console.log('detectText:', JSON.stringify(texts[0], null, 2));
-    callback(null, texts);
-  });
+      if (err) {
+        console.log('detectText:error:', err);
+        return callback(err);
+      }
+      if (!texts[0]) {
+        console.log("Rich Docs detectText found no texts");
+        texts = [''];
+      }
+      console.log('detectText:', JSON.stringify(texts[0], null, 2));
+      callback(null, texts);
+    });
+  }  
+  catch (e) {
+    callback("vision.detectText exception on file:" + inputFile + " exception:" + e, "");
+  }  
 }
 // [END construct_request]
 
