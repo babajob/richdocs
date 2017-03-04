@@ -1,6 +1,7 @@
 var express = require('express');
 var router = express.Router();
 var RichDocs = require('../richDocs');
+const util = require('util');
 var richDocs = new RichDocs();
     
 
@@ -98,6 +99,7 @@ router.delete('/richdocs/:id', function(req, res, next) {
 
 router.post('/richdocs', function (req, res, next) {
 
+    
   var user = {};
   if (req.body.firstName == null || req.body.lastName == null || req.body.userid == null
     || req.body.contentType == null || req.body.contentUrl == null
@@ -108,6 +110,19 @@ router.post('/richdocs', function (req, res, next) {
     user.firstName = req.body.firstName;
     user.lastName = req.body.lastName;
     user.userid = req.body.userid;
+
+
+    //Optional auth parameters to save to babajob 
+    user.jobSeekerId = req.body.jobSeekerId || ""; // mongo ID
+    user.accessToken = req.body.accessToken || ""; //Auth token...
+    //consumerKey ?
+
+    console.log("-----routes user");
+    consol.log(util.inspect(user));
+
+
+    console.log("-----routes body");
+    consol.log(util.inspect(req.body));
     
     //var fileURL = "http://www.fingerprintsscanner.com/wp-content/uploads/2013/10/Biometric-Driving-Licence5.jpg"
     var richDoc = {};
@@ -121,12 +136,6 @@ router.post('/richdocs', function (req, res, next) {
     if (req.body.documentHint) {
       richDoc.documentHint = req.body.documentHint || "";
     }
-
-
-    //Optional auth parameters to save to babajob 
-    user.jobSeekerId = req.body.jobSeekerId || ""; // mongo ID
-    user.accessToken = req.body.accessToken || ""; //Auth token...
-    //consumerKey ?
     
 
     var options = {};
