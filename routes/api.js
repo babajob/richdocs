@@ -118,11 +118,11 @@ router.post('/richdocs', function (req, res, next) {
     //consumerKey ?
 
     console.log("-----routes user");
-    consol.log(util.inspect(user));
+    console.log(util.inspect(user));
 
 
     console.log("-----routes body");
-    consol.log(util.inspect(req.body));
+    console.log(util.inspect(req.body));
     
     //var fileURL = "http://www.fingerprintsscanner.com/wp-content/uploads/2013/10/Biometric-Driving-Licence5.jpg"
     var richDoc = {};

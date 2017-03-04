@@ -725,11 +725,15 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         detectText(richDoc.contentUrl, function (err, texts) {
           console.log("Got back texts:" + JSON.stringify(texts, 0, 2));
           if (err) {
-            return callback(err);
-          }
-          if (!texts) {
             result.err = err;
-            return callback(err, result);
+            console.log("detextText ERROR", err);
+            texts = [""];
+
+            //return callback(err);
+          } else if (!texts) {
+            console.log("detextText no texts");
+            texts = [""];
+            //return callback(err, result);
           }
 
           var summary = texts[0];
@@ -2024,12 +2028,27 @@ function saveThumbnailStream(stream, fileName, callback)
 }
 
 function getUniquePhotoFileName(user, richDoc, suffix) {
+  var ext = getExtension(richDoc.contentUrl) || "png";
+
   var fileName =
     (user.userid ? user.userid : "unknownId") + 
     "-" + (richDoc.documentHint ? richDoc.documentHint : "unknown")
     + (suffix ? "-" + suffix : "")
-    + '-' + "image.png";
+    + '-' + "file." + ext;
   return fileName;
+}
+
+function getExtension(url) {
+  var extension = null;
+  var extMatches = url.match(/\.\w{3,4}($|\?)/g);
+  
+  if (extMatches != null && extMatches.length > 0) {
+    var ext = extMatches[0];
+    ext = S(ext).replaceAll('?', '').s;
+    ext = S(ext).replaceAll('.', '').s;
+    extension = ext;
+  }
+  return extension;
 }
 
 //=========================================================
