@@ -746,10 +746,10 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
         
           console.log("matchName: user.firstName:" + user.firstName + " user.lastName:" + user.lastName + " summary:" + summary + " RESULT:", result.nameMatch);
 
-          if (result.document.hint != "Resume") {
-            result = detectIDDocument(summary, result);
-          } else {
+          if (result.document.hint == "Resume" || result.document.hint == "Photo") {
             result.document.type = result.document.hint;
+          } else {
+            result = detectIDDocument(summary, result);
           }  
           
           //set success to true if we found a known document pattern.
@@ -963,15 +963,27 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           callback(null, result);
         }
         else {
-          console.log("Saving RichDoc Properties to Babajob...");
-          saveRichDocToBJ(result, user.jobSeekerId, user.accessToken,
-            function (err, result) {
-              if (err) {
-                return callback(err, result);
-              } else {
-                callback(null, result);
-              }
-            });
+          if (result.document.hint == "Photo") {
+            console.log("Saving Photo to Babajob...");
+            savePhotoToBJ(result, user.userid, user.jobSeekerId, user.accessToken,
+              function (err, result) {
+                if (err) {
+                  return callback(err, result);
+                } else {
+                  callback(null, result);
+                }
+              });
+          } else {
+            console.log("Saving RichDoc Properties to Babajob...");
+            saveRichDocToBJ(result, user.jobSeekerId, user.accessToken,
+              function (err, result) {
+                if (err) {
+                  return callback(err, result);
+                } else {
+                  callback(null, result);
+                }
+              });
+          }  
         }
       }
 
@@ -1566,6 +1578,60 @@ var onProduction = debugLocallyButOnProductionDB || config.onProduction;
 var bjAPIDomain =onProduction ? "http://api.babajob.com" : "http://preprodapi.babajob.com";
 //var bjWebDomain =onProduction ? "http://www.babajob.com" : "http://preprod.babajob.com";
 
+
+function savePhotoToBJ(richDocObj, bjUserId, jobSeekerId, accessToken, callback) {
+ 
+  var putData = [];
+  var picUrl = richDocObj.contentUrl;
+  console.log("Saving Photo...");
+
+  if (!(picUrl && bjUserId && jobSeekerId && accessToken)) {
+    handleError("savePhotoToBJ", " missing picUrl:" + picUrl + " bjUserId: " + bjUserId
+      + " jobSeekerId:" + jobSeekerId + " or accessToken:" + accessToken, null,
+      "Not enough parameters while saving FB Pic to Bababjob...");
+  } else {
+    var uri = bjAPIDomain + "/api/jobseeker/" + bjUserId + "/profilepic";
+
+    var formData = {
+      custom_file: {
+        value: request(picUrl),
+        options: {
+          filename: 'image.png',
+          contentType: 'image/*'
+        }
+      }
+    };
+
+    request({
+      uri: uri,
+      method: "POST",
+      timeout: 45000,
+      contentType: "multipart/form-data",
+      headers: {
+        'Authorization': accessToken,
+        'consumer-key': consumerKey,
+        'ProfileId': jobSeekerId
+      },
+      formData: formData
+    }, function (error, response, body) {
+      if (error) {
+        handleError("savePhotoToBJ", error, picUrl,
+          "error while saving your photo via RichDocs..."
+          , uri, body);
+        callback(e, richDocObj);
+      } else {
+        console.log("Saved new photo`! ");
+        console.log(util.inspect(body, false, 20));
+        // return the putData to callers so they can update their data models...
+        richDocObj.profile_pic_data = body;
+        callback(null, richDocObj);
+      }
+    }
+    );
+  }
+}
+
+
 function saveRichDocToBJ(richDocObj, jobSeekerId, accessToken, callback) {
  
   var putData = [];
@@ -1670,7 +1736,8 @@ function getRichDocJSONForBJSave(richDocObj, session) {
       dataType: 'Document'
     }
 
-  } else {
+  } 
+  else {
     //Get the IDProofs JSON
 
     isCarDocument = false; // TODO: replace once the schema is final...
