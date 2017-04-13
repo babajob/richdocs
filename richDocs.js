@@ -1571,7 +1571,12 @@ function copyFileToBJ(originalUrlOrStream, contentType, fileName, callback) {
 ////// SAVE RICH DOC TO BABAJOB ////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-var consumerKey = "DZdXZhkUx2qjom5YwJYc0PiBgIgcKI"; 
+// old IVR key 
+//var consumerKey = "DZdXZhkUx2qjom5YwJYc0PiBgIgcKI"; 
+
+//Chat bot consumer key...
+var consumerKey = "YwXQg4OsjFUU1hBUC8AqjqHn2LGcau";
+
 
 var debugLocallyButOnProductionDB = false;
 var onProduction = debugLocallyButOnProductionDB || config.onProduction;
