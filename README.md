@@ -13,10 +13,19 @@
 > Get the Creds .json files from Sean or create your own from google API cloud and Firebase
 5. Add to root directory: `FirebaseServiceAccount.json`
 
-### Google API Creds (be sure to change the name of your project below from babajobrichdocs)
+### Google API Creds 
+> be sure to change the name of your project below from `babajobrichdocs`
 6. Add to root directory: `RichDocsCreds.json`
 
 ### TODO: Get Microsoft Creds
+> We currently call the Microsoft Vision API to get a well-framed thumbnail of whatever 
+
+### TODO Optional: Get BetterPlace Authentication Creds
+> We use betterplace to verify Indian PAN and Aadhaar information
+
+### TODO Optional: Get CloudConvert Authentication Creds
+> We use cloudconvert to convert facebook audio clips to formats that the Google Speech Reco accepts
+
 
 #To Start the Service
 1. Open `git bash` 
