@@ -760,6 +760,9 @@ richDocs.prototype.parseRichDoc = function (richDoc, firebaseKey, user, options,
           //update the summary text with the name match results.
           result.document.summary = updateSummaryforMatchName(result.nameMatch, user, result.document.summary);
 
+          //clean the summary so we don't show numbers directly....
+          result.document.summary = result.document.summary.replace(/\d{3}/g, "XXX");
+          
           //Update the Summary           
           if (result.document.hint) {
             if (result.success) {
