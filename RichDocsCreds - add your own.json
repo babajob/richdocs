@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "babarichdocs",
+  //change to your own
+  "private_key_id": "",
+  "private_key": "",
+  "client_email": "ADD",
+  "client_id": "ADD",
+  "auth_uri": "ADD",
+  "token_uri": "ADD",
+  "auth_provider_x509_cert_url": "ADD",
+  "client_x509_cert_url": "ADD"
+}

@@ -1,7 +1,16 @@
+
+#FireBase secrets
+FirebaseServiceAccount.json
+
+#Google API Creds
+RichDocsCreds.json
+
+
 # Logs
 logs
 *.log
 npm-debug.log*
+
 
 # Runtime data
 pids
